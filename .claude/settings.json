@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php -r ' *)",
+      "Bash(php -r 'require '\\\\''vendor/autoload.php'\\\\''; $d=Dotenv\\\\Dotenv::createImmutable\\('\\\\''.'\\\\''\\); $d->load\\(\\); $p=new PDO\\('\\\\''mysql:host='\\\\''.$_ENV['\\\\''DB_HOST'\\\\''].'\\\\'';dbname='\\\\''.$_ENV['\\\\''DB_NAME'\\\\''], $_ENV['\\\\''DB_USER'\\\\''], $_ENV['\\\\''DB_PASS'\\\\'']\\); $s=$p->prepare\\('\\\\''SELECT TRIM\\(c.documento\\) n, TRIM\\(g.nombrecli\\) cl, DATE_FORMAT\\(c.fechent,\"%d/%m/%Y\"\\) f FROM cabezamov c INNER JOIN geclientes g ON TRIM\\(g.codcli\\)=TRIM\\(c.codcp\\) WHERE c.tm=:t AND c.estado IN\\(\"C\",\"M\"\\) AND TRIM\\(g.codtipocli\\)=:ct GROUP BY c.documento,c.prefijo,c.fechent,c.estado,g.nombrecli ORDER BY c.fechent'\\\\''\\); $s->execute\\(['\\\\'':t'\\\\''=>'\\\\''PV'\\\\'','\\\\'':ct'\\\\''=>'\\\\''01'\\\\'']\\); foreach\\($s->fetchAll\\(PDO::FETCH_ASSOC\\) as $r\\) echo $r['\\\\''n'\\\\''].'\\\\'' '\\\\''.$r['\\\\''cl'\\\\''].'\\\\'' '\\\\''.$r['\\\\''f'\\\\''].PHP_EOL;')"
+    ]
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php -r ' *)",
+      "Bash(php -l public/index.php)",
+      "Bash(php -l src/Controllers/PlanillaPedidosController.php)"
+    ]
+  }
+}
