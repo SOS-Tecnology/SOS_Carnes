@@ -77,9 +77,9 @@ function normalizarComencpo(string $raw): string {
     /* ── Comparador + input ── */
     .item-row {
         display: grid;
-        grid-template-columns: 1fr 1fr 1.6fr;
+        grid-template-columns: 1fr 1fr 1fr auto;
         gap: .6rem;
-        align-items: end;
+        align-items: flex-end;
     }
     .cmp-box { background: #f5f7ff; border: 1px solid #dce4f8; border-radius: .35rem; padding: .45rem .6rem; text-align: center; }
     .cmp-label { font-size: .62rem; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; margin-bottom: .1rem; }
@@ -105,6 +105,18 @@ function normalizarComencpo(string $raw): string {
         box-shadow: 0 0 0 3px rgba(26,77,173,.18);
         background: #fff;
     }
+
+    .btn-sticker {
+        display: flex; align-items: center; gap: .35rem;
+        background: #f59e0b; color: #fff; border: none;
+        border-radius: .4rem; padding: .55rem .9rem;
+        font-size: .8rem; font-weight: 600; cursor: pointer;
+        letter-spacing: .02em; height: fit-content;
+        box-shadow: 0 2px 6px rgba(245,158,11,.3);
+        transition: background .15s, transform .1s;
+    }
+    .btn-sticker:hover { background: #d97706; transform: translateY(-1px); }
+    .btn-sticker:active { transform: translateY(0); }
 
     /* ── Footer form ── */
     .prep-footer {
@@ -143,10 +155,12 @@ function normalizarComencpo(string $raw): string {
         .btn-generar  { min-height: 52px; font-size: 1rem; padding: .75rem 1.8rem; }
         .btn-volver   { min-height: 44px; font-size: .88rem; padding: .5rem 1.1rem; }
         .btn-back     { min-height: 36px; }
+        .btn-sticker  { min-height: 52px; padding: .65rem 1.1rem; }
     }
     @media (max-width: 640px) {
         .item-row { grid-template-columns: 1fr 1fr; }
         .item-row .peso-group { grid-column: 1 / -1; }
+        .item-row .btn-sticker { grid-column: 1 / -1; }
         .prep-header-info { margin-left: 0; }
     }
 </style>
@@ -225,6 +239,14 @@ function normalizarComencpo(string $raw): string {
                                onfocus="this.select()"
                                required>
                     </div>
+                    <button type="button" 
+                            class="btn-sticker"
+                            onclick="imprimirSticker(event, '<?= htmlspecialchars(addslashes($it['codart'])) ?>', '<?= htmlspecialchars(addslashes($it['descripcion'])) ?>', '<?= $idx ?>')">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4H9a2 2 0 00-2 2v2a2 2 0 002 2h6a2 2 0 002-2v-2a2 2 0 00-2-2zm0 0h6a2 2 0 002-2v-4a2 2 0 00-2-2h-.5"/>
+                        </svg>
+                        Sticker
+                    </button>
                 </div>
             </div>
             <?php endforeach; ?>
@@ -267,6 +289,124 @@ function validarForm() {
         'Va a generar el documento AP para el pedido <?= htmlspecialchars(addslashes($nrodocFmt)) ?>.\n' +
         '¿Confirma los pesos ingresados?'
     );
+}
+
+/**
+ * Genera e imprime el sticker para un item
+ * @param {Event} event - Evento del botón
+ * @param {string} codart - Código del artículo
+ * @param {string} descripcion - Descripción del producto
+ * @param {number} idx - Índice del item (para obtener el peso del input)
+ */
+function imprimirSticker(event, codart, descripcion, idx) {
+    event.preventDefault();
+    
+    // Obtener el peso del input
+    const pesoInput = document.getElementById(`peso_${idx}`);
+    if (!pesoInput) {
+        mostrarAlertaAmable('Error', '⚠ No se encontró el campo de peso.', 'error');
+        return;
+    }
+    
+    const peso = pesoInput.value.trim();
+    
+    // Validar que el peso sea válido y mayor a 0
+    if (peso === '' || isNaN(parseFloat(peso))) {
+        mostrarAlertaAmable(
+            'Campo incompleto',
+            '⚠ Por favor verifica el campo <strong>Peso</strong>: debe ser un número válido mayor a 0',
+            'warning'
+        );
+        pesoInput.focus();
+        return;
+    }
+    
+    const pesoNum = parseFloat(peso);
+    if (pesoNum <= 0) {
+        mostrarAlertaAmable(
+            'No se puede generar el sticker',
+            '⚠ No es posible generar un sticker con peso de <strong>0 kg</strong>. Por favor ingresa el peso definitivo del producto.',
+            'warning'
+        );
+        pesoInput.focus();
+        return;
+    }
+    
+    if (pesoNum > 9999) {
+        mostrarAlertaAmable(
+            'Peso inválido',
+            '⚠ El peso parece demasiado alto (máximo 9999 kg). Verifica el valor ingresado.',
+            'warning'
+        );
+        pesoInput.focus();
+        return;
+    }
+    
+    // Construir URL para generar el sticker
+    const url = new URL('/sticker/generar', window.location.origin);
+    url.searchParams.append('codart', codart);
+    url.searchParams.append('desc', descripcion);
+    url.searchParams.append('peso', peso);
+    
+    // Abrir en nueva ventana/pestaña para impresión
+    const ventana = window.open(url.toString(), '_blank', 'width=400,height=600,menubar=no,toolbar=no');
+    if (ventana) {
+        ventana.focus();
+    }
+}
+
+/**
+ * Muestra una alerta con formato amable
+ */
+function mostrarAlertaAmable(titulo, mensaje, tipo = 'info') {
+    // Crear contenedor si no existe
+    let container = document.getElementById('alertas-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'alertas-container';
+        container.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            max-width: 400px;
+        `;
+        document.body.appendChild(container);
+    }
+    
+    // Crear elemento de alerta
+    const alertDiv = document.createElement('div');
+    const colores = {
+        'success': { bg: '#d4edda', border: '#c3e6cb', text: '#155724' },
+        'warning': { bg: '#fff3cd', border: '#ffeaa7', text: '#856404' },
+        'error': { bg: '#f8d7da', border: '#f5c6cb', text: '#721c24' },
+        'info': { bg: '#d1ecf1', border: '#bee5eb', text: '#0c5460' }
+    };
+    const color = colores[tipo] || colores['info'];
+    
+    alertDiv.innerHTML = `
+        <div style="
+            background: ${color.bg};
+            border: 1px solid ${color.border};
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 10px;
+            color: ${color.text};
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        ">
+            <strong style="display: block; margin-bottom: 5px;">${titulo}</strong>
+            <div>${mensaje}</div>
+        </div>
+    `;
+    
+    container.appendChild(alertDiv);
+    
+    // Auto-remover después de 5 segundos
+    setTimeout(() => {
+        alertDiv.style.opacity = '0';
+        alertDiv.style.transition = 'opacity 0.3s';
+        setTimeout(() => alertDiv.remove(), 300);
+    }, 5000);
 }
 
 // Auto-foco al primer input

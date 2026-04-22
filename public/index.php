@@ -18,6 +18,7 @@ use Dotenv\Dotenv;
 use App\Middleware\AuthMiddleware;
 use App\Controllers\PlanillaPedidosController;
 use App\Controllers\PreparacionPedidoController;
+use App\Controllers\StickerController;
 
 // ── Entorno ───────────────────────────────────────────────
 $dotenv = Dotenv::createImmutable(__DIR__ . '/..');
@@ -242,6 +243,12 @@ $app->group('', function ($group) {
     $group->post('/preparacion-pedido/{nrodoc}/preparar', function ($request, $response, $args) {
         $ctrl = new PreparacionPedidoController($GLOBALS['db']);
         return $ctrl->guardar($request, $response, $args);
+    });
+
+    // ── Sticker para despacho ─────────────────────────────
+    $group->get('/sticker/generar', function ($request, $response) {
+        $ctrl = new StickerController();
+        return $ctrl->generar($request, $response);
     });
 
     $group->get('/api/planilla-pedidos', function ($request, $response) {
