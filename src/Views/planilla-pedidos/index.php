@@ -163,6 +163,31 @@ function estadoPedido(int $total, int $completos, int $iniciados): array
         font-size: .85rem;
         padding: 2rem 0;
     }
+
+    /* ── Tablet: touch targets ≥44px ──────────────────────── */
+    @media (max-width: 1280px) {
+        .pp-grid {
+            grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+            gap: 1rem;
+        }
+        .pp-card { padding: 1rem 1rem .85rem; }
+        .pp-card-title { font-size: .92rem; }
+        .pp-card-info  { font-size: .82rem; }
+        .pp-card-actions { gap: .55rem; margin-top: .7rem; }
+        .btn-cerrar {
+            font-size: .8rem;
+            padding: .55rem .85rem;
+            min-height: 44px;
+            border-radius: .4rem;
+        }
+        .btn-estado {
+            font-size: .8rem;
+            padding: .55rem .75rem;
+            min-height: 44px;
+            border-radius: .4rem;
+        }
+        .dot { width: 13px; height: 13px; }
+    }
 </style>
 
 <!-- Header tipo cliente -->
@@ -203,6 +228,7 @@ function estadoPedido(int $total, int $completos, int $iniciados): array
                 ?>
                 <div class="pp-card"
                      id="card-<?= htmlspecialchars($p['nrodoc']) ?>"
+                     data-completo="<?= ($est['dot'] === '#16a34a') ? '1' : '0' ?>"
                      onclick="abrirPedido('<?= htmlspecialchars($p['nrodoc']) ?>')"
                      title="Ver detalle del pedido">
                     <div class="pp-card-title"><?= htmlspecialchars($p['nomcli']) ?></div>
@@ -275,7 +301,9 @@ function buildCard(p) {
 
     const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
+    const completo = (completos >= total && total > 0) ? '1' : '0';
     return `<div class="pp-card" id="card-${esc(p.nrodoc)}"
+                 data-completo="${completo}"
                  onclick="abrirPedido('${esc(p.nrodoc)}')" title="Ver detalle del pedido">
         <div class="pp-card-title">${esc(p.nomcli)}</div>
         <div class="pp-card-info">
@@ -307,6 +335,13 @@ function cerrarPedido(e, nrodoc) {
     e.stopPropagation();
     const card = document.getElementById('card-' + nrodoc);
     if (!card) return;
+
+    if (card.dataset.completo !== '1') {
+        if (!confirm('Este pedido tiene ítems pendientes por alistar.\n¿Desea cerrarlo de todas formas?')) {
+            return;
+        }
+    }
+
     card.classList.add('cerrando');
 
     fetch('/planilla-pedidos/cerrar/' + encodeURIComponent(nrodoc), { method: 'POST' })
@@ -365,6 +400,7 @@ function pollPedidos() {
                     else                                 dot = '#ca8a04';
                     const dotEl = card.querySelector('.btn-estado .dot');
                     if (dotEl) dotEl.style.background = dot;
+                    card.dataset.completo = (completos >= total && total > 0) ? '1' : '0';
                 }
             });
 

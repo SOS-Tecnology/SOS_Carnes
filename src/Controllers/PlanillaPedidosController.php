@@ -27,11 +27,13 @@ class PlanillaPedidosController
 
     public function cerrar($request, $response, $args): mixed
     {
-        $documento = $args['nrodoc'];
-        $this->db->update("cabezamov", ["estado" => "O"], [
-            "documento" => $documento,
-            "tm"        => "PV",
-        ]);
+        $documento = trim($args['nrodoc']);
+        $this->db->pdo->prepare("
+            UPDATE cabezamov
+            SET estadorm = 'A', estado = 'O'
+            WHERE TRIM(tm) = 'PV' AND TRIM(documento) = :doc
+        ")->execute([':doc' => $documento]);
+
         $response->getBody()->write(json_encode(['ok' => true]));
         return $response->withHeader('Content-Type', 'application/json');
     }
@@ -80,11 +82,12 @@ class PlanillaPedidosController
 
     public function verItem($request, $response, $args): mixed
     {
-        $nrodoc = trim($args['nrodoc']);
-        $numreg = (int) $args['numreg'];
+        $nrodoc   = trim($args['nrodoc']);
+        $registro = trim($args['registro']);
 
         $cabeza = $this->db->pdo->prepare("
             SELECT TRIM(c.documento) AS nrodoc, TRIM(c.prefijo) AS prefijo,
+                   TRIM(c.codcp)     AS codcp,  TRIM(c.codsuc)  AS codsuc,
                    TRIM(g.nombrecli) AS nomcli
             FROM cabezamov c
             INNER JOIN geclientes g ON c.codcp = g.codcli
@@ -93,82 +96,240 @@ class PlanillaPedidosController
         ");
         $cabeza->execute([':doc' => $nrodoc]);
         $pedido = $cabeza->fetch(\PDO::FETCH_ASSOC);
-
         if (!$pedido) {
             return $response->withHeader('Location', '/planilla-pedidos')->withStatus(302);
         }
 
         $stmt = $this->db->pdo->prepare("
-            SELECT cm.numreg, TRIM(cm.codr) AS codart,
-                   TRIM(cm.descr) AS descripcion,
+            SELECT TRIM(cm.registro)  AS registro,
+                   TRIM(cm.codr)      AS codart,
+                   TRIM(cm.descr)     AS descripcion,
+                   TRIM(cm.comencpo)  AS comencpo,
                    cm.unidad, cm.cantidad, cm.cantent
             FROM cuerpomov cm
-            WHERE cm.tm = 'PV'
+            WHERE TRIM(cm.tm)        = 'PV'
               AND TRIM(cm.prefijo)   = :prefijo
               AND TRIM(cm.documento) = :doc
-              AND cm.numreg = :numreg
+              AND TRIM(cm.registro)  = :registro
             LIMIT 1
         ");
-        $stmt->execute([':prefijo' => $pedido['prefijo'], ':doc' => $nrodoc, ':numreg' => $numreg]);
+        $stmt->execute([':prefijo' => $pedido['prefijo'], ':doc' => $nrodoc, ':registro' => $registro]);
         $item = $stmt->fetch(\PDO::FETCH_ASSOC);
-
         if (!$item) {
             return $response->withHeader('Location', '/planilla-pedidos/' . urlencode($nrodoc) . '/detalle')->withStatus(302);
         }
 
+        $fichaTecnica = $this->getFichaTecnica($pedido['codcp'], $pedido['codsuc'], $item['codart']);
+        $lotes        = $this->getItemmovEntries($nrodoc, $pedido['prefijo'], $item['codart'], $registro);
+
         return renderView($response, __DIR__ . '/../Views/planilla-pedidos/item.php', 'Alistar Ítem', [
-            'pedido' => $pedido,
-            'item'   => $item,
+            'pedido'       => $pedido,
+            'item'         => $item,
+            'fichaTecnica' => $fichaTecnica,
+            'lotes'        => $lotes,
         ]);
     }
 
     public function actualizarItem($request, $response, $args): mixed
     {
-        $nrodoc  = trim($args['nrodoc']);
-        $numreg  = (int) $args['numreg'];
-        $body    = $request->getParsedBody();
-        $cantent = (float) ($body['cantent'] ?? 0);
+        $nrodoc   = trim($args['nrodoc']);
+        $registro = trim($args['registro']);
+        $body     = $request->getParsedBody();
+        $lote     = trim($body['lote']      ?? '');
+        $temp     = (float)($body['temp']   ?? 0);
+        $cantidad = (float)($body['cantidad'] ?? 0);
 
-        $prefijo = $this->db->pdo->prepare("
-            SELECT TRIM(prefijo) AS prefijo FROM cabezamov
-            WHERE tm = 'PV' AND TRIM(documento) = :doc LIMIT 1
-        ");
-        $prefijo->execute([':doc' => $nrodoc]);
-        $row = $prefijo->fetch(\PDO::FETCH_ASSOC);
-
-        if ($row) {
-            $this->db->pdo->prepare("
-                UPDATE cuerpomov SET cantent = :cantent
-                WHERE tm = 'PV'
-                  AND TRIM(prefijo)   = :prefijo
-                  AND TRIM(documento) = :doc
-                  AND numreg          = :numreg
-            ")->execute([
-                ':cantent' => $cantent,
-                ':prefijo' => $row['prefijo'],
-                ':doc'     => $nrodoc,
-                ':numreg'  => $numreg,
-            ]);
+        if ($cantidad <= 0) {
+            return $response->withHeader('Location',
+                '/planilla-pedidos/' . urlencode($nrodoc) . '/item/' . urlencode($registro)
+            )->withStatus(302);
         }
 
-        return $response->withHeader('Location', '/planilla-pedidos/' . urlencode($nrodoc) . '/detalle')->withStatus(302);
+        // PV header + item info in one query
+        $itStmt = $this->db->pdo->prepare("
+            SELECT TRIM(cm.codr)    AS codr,
+                   TRIM(cm.descr)   AS descr,
+                   TRIM(cm.prefijo) AS prefijo
+            FROM cuerpomov cm
+            WHERE TRIM(cm.tm)        = 'PV'
+              AND TRIM(cm.documento) = :doc
+              AND TRIM(cm.registro)  = :registro
+            LIMIT 1
+        ");
+        $itStmt->execute([':doc' => $nrodoc, ':registro' => $registro]);
+        $item = $itStmt->fetch(\PDO::FETCH_ASSOC);
+        if (!$item) {
+            return $response->withHeader('Location', '/planilla-pedidos/' . urlencode($nrodoc) . '/detalle')->withStatus(302);
+        }
+
+        // Next itemre for this registro
+        $nrStmt = $this->db->pdo->prepare("
+            SELECT COALESCE(MAX(CAST(itemre AS UNSIGNED)), 0) + 1
+            FROM itemmov
+            WHERE TRIM(tm) = 'PV' AND TRIM(prefijo) = :prefijo
+              AND TRIM(documento) = :doc AND TRIM(registro) = :registro
+        ");
+        $nrStmt->execute([':prefijo' => $item['prefijo'], ':doc' => $nrodoc, ':registro' => $registro]);
+        $newItemre = (string)($nrStmt->fetchColumn() ?: 1);
+
+        $hora = date('H:i:s');
+
+        $this->db->pdo->prepare("
+            INSERT INTO itemmov (tm, prefijo, documento, codr, descr, cantidad, lote, registro, itemre, temp, hora)
+            VALUES ('PV', :prefijo, :doc, :codr, :descr, :cantidad, :lote, :registro, :itemre, :temp, :hora)
+        ")->execute([
+            ':prefijo'  => trim($item['prefijo']),
+            ':doc'      => $nrodoc,
+            ':codr'     => $item['codr'],
+            ':descr'    => $item['descr'],
+            ':cantidad' => $cantidad,
+            ':lote'     => $lote,
+            ':registro' => $registro,
+            ':itemre'   => $newItemre,
+            ':temp'     => $temp,
+            ':hora'     => $hora,
+        ]);
+
+        $this->recalcCantent($nrodoc, $item['prefijo'], $item['codr'], $registro);
+
+        return $response->withHeader('Location',
+            '/planilla-pedidos/' . urlencode($nrodoc) . '/item/' . urlencode($registro)
+        )->withStatus(302);
+    }
+
+    public function eliminarLote($request, $response, $args): mixed
+    {
+        $nrodoc   = trim($args['nrodoc']);
+        $registro = trim($args['registro']);
+        $hora     = trim($request->getParsedBody()['hora'] ?? '');
+
+        $itStmt = $this->db->pdo->prepare("
+            SELECT TRIM(cm.codr) AS codr, TRIM(cm.prefijo) AS prefijo
+            FROM cuerpomov cm
+            WHERE TRIM(cm.tm)        = 'PV'
+              AND TRIM(cm.documento) = :doc
+              AND TRIM(cm.registro)  = :registro
+            LIMIT 1
+        ");
+        $itStmt->execute([':doc' => $nrodoc, ':registro' => $registro]);
+        $item = $itStmt->fetch(\PDO::FETCH_ASSOC);
+        if (!$item) {
+            return $response->withHeader('Location', '/planilla-pedidos/' . urlencode($nrodoc) . '/detalle')->withStatus(302);
+        }
+
+        $this->db->pdo->prepare("
+            DELETE FROM itemmov
+            WHERE TRIM(tm)        = 'PV'
+              AND TRIM(prefijo)   = :prefijo
+              AND TRIM(documento) = :doc
+              AND TRIM(codr)      = :codr
+              AND TRIM(registro)  = :registro
+              AND hora            = :hora
+            LIMIT 1
+        ")->execute([
+            ':prefijo'  => $item['prefijo'],
+            ':doc'      => $nrodoc,
+            ':codr'     => $item['codr'],
+            ':registro' => $registro,
+            ':hora'     => $hora,
+        ]);
+
+        $this->recalcCantent($nrodoc, $item['prefijo'], $item['codr'], $registro);
+
+        return $response->withHeader('Location',
+            '/planilla-pedidos/' . urlencode($nrodoc) . '/item/' . urlencode($registro)
+        )->withStatus(302);
+    }
+
+    // ── Private helpers ────────────────────────────────────────────────────
+
+    private function recalcCantent(string $pvDoc, string $pvPrefijo, string $codr, string $registro): void
+    {
+        $sumStmt = $this->db->pdo->prepare("
+            SELECT COALESCE(SUM(cantidad), 0)
+            FROM itemmov
+            WHERE TRIM(tm)        = 'PV'
+              AND TRIM(prefijo)   = :prefijo
+              AND TRIM(documento) = :doc
+              AND TRIM(codr)      = :codr
+              AND TRIM(registro)  = :registro
+        ");
+        $sumStmt->execute([
+            ':prefijo'  => $pvPrefijo,
+            ':doc'      => $pvDoc,
+            ':codr'     => $codr,
+            ':registro' => $registro,
+        ]);
+        $total = (float) $sumStmt->fetchColumn();
+
+        $this->db->pdo->prepare("
+            UPDATE cuerpomov SET cantent = :total
+            WHERE TRIM(tm)        = 'PV'
+              AND TRIM(prefijo)   = :prefijo
+              AND TRIM(documento) = :doc
+              AND TRIM(codr)      = :codr
+              AND TRIM(registro)  = :registro
+        ")->execute([
+            ':total'    => $total,
+            ':prefijo'  => $pvPrefijo,
+            ':doc'      => $pvDoc,
+            ':codr'     => $codr,
+            ':registro' => $registro,
+        ]);
+    }
+
+    private function getFichaTecnica(string $codcp, string $codsuc, string $codr): ?array
+    {
+        $stmt = $this->db->pdo->prepare("
+            SELECT pp.empaque, pp.conservacion, pp.embalaje,
+                   pp.tolerancia, pp.diasmaduracion, pp.pesoxemp
+            FROM platoproyecto pp
+            WHERE TRIM(pp.codigoproy)  = :codcp
+              AND TRIM(pp.codsuc)      = :codsuc
+              AND TRIM(pp.codigoplato) = :codr
+            LIMIT 1
+        ");
+        $stmt->execute([':codcp' => $codcp, ':codsuc' => $codsuc, ':codr' => $codr]);
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+        return $row ?: null;
+    }
+
+    private function getItemmovEntries(string $pvDoc, string $pvPrefijo, string $codr, string $registro): array
+    {
+        $stmt = $this->db->pdo->prepare("
+            SELECT i.hora, i.lote, i.temp, i.cantidad
+            FROM itemmov i
+            WHERE TRIM(i.tm)        = 'PV'
+              AND TRIM(i.prefijo)   = :prefijo
+              AND TRIM(i.documento) = :doc
+              AND TRIM(i.codr)      = :codr
+              AND TRIM(i.registro)  = :registro
+            ORDER BY i.hora
+        ");
+        $stmt->execute([
+            ':prefijo'  => $pvPrefijo,
+            ':doc'      => $pvDoc,
+            ':codr'     => $codr,
+            ':registro' => $registro,
+        ]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC);
     }
 
     private function getItems(string $nrodoc, string $prefijo): array
     {
         $stmt = $this->db->pdo->prepare("
-            SELECT cm.numreg,
-                   TRIM(cm.codr)       AS codart,
-                   TRIM(cm.descr)  AS descripcion,
+            SELECT TRIM(cm.registro)                           AS registro,
+                   TRIM(cm.codr)                               AS codart,
+                   TRIM(cm.descr)                              AS descripcion,
                    cm.unidad,
                    cm.cantidad,
                    cm.cantent,
-                   GREATEST(cm.cantidad - cm.cantent, 0) AS diferencia
+                   GREATEST(cm.cantidad - cm.cantent, 0)       AS diferencia
             FROM cuerpomov cm
-            WHERE cm.tm = 'PV'
+            WHERE TRIM(cm.tm)        = 'PV'
               AND TRIM(cm.prefijo)   = :prefijo
               AND TRIM(cm.documento) = :doc
-            ORDER BY cm.numreg
+            ORDER BY cm.registro
         ");
         $stmt->execute([':prefijo' => $prefijo, ':doc' => $nrodoc]);
         return $stmt->fetchAll(\PDO::FETCH_ASSOC);
@@ -183,7 +344,7 @@ class PlanillaPedidosController
                 SELECT a.documento, prefijo, tm, fecha, fechent, codcp, b.codtipocli, estado
                 FROM cabezamov a
                 INNER JOIN geclientes b ON a.codcp = b.codcli
-                WHERE tm = 'PV' AND a.estado IN ('M', 'C')
+                WHERE tm = 'PV' AND a.estado IN ('M', 'C') AND TRIM(a.estadorm) <> 'A'
             )
             SELECT
                 TRIM(c.documento)                                                          AS nrodoc,

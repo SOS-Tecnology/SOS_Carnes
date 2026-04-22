@@ -10,6 +10,11 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
     <style>
+        /* ── Tablet/touch global ──────────────────────────────── */
+        button, a, [role="button"], input, select, textarea {
+            touch-action: manipulation;
+        }
+
         /* ── SIDEBAR ─────────────────────────────────────────── */
         #sidebar {
             width: 240px;
@@ -58,6 +63,11 @@
         }
         #sidebar.collapsed .sb-item { position: relative; }
         #sidebar.collapsed .sb-item:hover .sb-tooltip { display: block; }
+
+        /* ── Tablet: sidebar icon-only por defecto (≤1024px) ──── */
+        @media (max-width: 1024px) {
+            main.flex-1 { padding: 0.65rem !important; }
+        }
     </style>
 </head>
 
@@ -157,6 +167,16 @@
                     $currentPath
                 ); ?>
 
+                <!-- Preparación de Pedido -->
+                <?php sbItem(
+                    '/preparacion-pedido', 'Preparación de Pedido',
+                    '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0
+                           00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2
+                           2 0 012 2m-6 9l2 2 4-4"/>',
+                    $currentPath
+                ); ?>
+
                 <!-- Planilla de Pedidos -->
                 <?php sbItem(
                     '/planilla-pedidos', 'Planilla de Pedidos',
@@ -194,7 +214,9 @@
 
     <script>
         const sidebar = document.getElementById('sidebar');
-        if (localStorage.getItem('sidebarCollapsed') === '1') {
+        const savedSidebar = localStorage.getItem('sidebarCollapsed');
+        // Tablets (≤1024px) colapsan por defecto en la primera visita
+        if (savedSidebar === '1' || (savedSidebar === null && window.innerWidth <= 1024)) {
             sidebar.classList.add('collapsed');
         }
         document.getElementById('sidebarToggle').addEventListener('click', function () {

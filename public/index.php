@@ -17,6 +17,7 @@ use Medoo\Medoo;
 use Dotenv\Dotenv;
 use App\Middleware\AuthMiddleware;
 use App\Controllers\PlanillaPedidosController;
+use App\Controllers\PreparacionPedidoController;
 
 // ── Entorno ───────────────────────────────────────────────
 $dotenv = Dotenv::createImmutable(__DIR__ . '/..');
@@ -212,14 +213,35 @@ $app->group('', function ($group) {
         return $ctrl->detalle($request, $response, $args);
     });
 
-    $group->get('/planilla-pedidos/{nrodoc}/item/{numreg}', function ($request, $response, $args) {
+    $group->get('/planilla-pedidos/{nrodoc}/item/{registro}', function ($request, $response, $args) {
         $ctrl = new PlanillaPedidosController($GLOBALS['db']);
         return $ctrl->verItem($request, $response, $args);
     });
 
-    $group->post('/planilla-pedidos/{nrodoc}/item/{numreg}', function ($request, $response, $args) {
+    $group->post('/planilla-pedidos/{nrodoc}/item/{registro}', function ($request, $response, $args) {
         $ctrl = new PlanillaPedidosController($GLOBALS['db']);
         return $ctrl->actualizarItem($request, $response, $args);
+    });
+
+    $group->post('/planilla-pedidos/{nrodoc}/item/{registro}/eliminar', function ($request, $response, $args) {
+        $ctrl = new PlanillaPedidosController($GLOBALS['db']);
+        return $ctrl->eliminarLote($request, $response, $args);
+    });
+
+    // ── Preparación de Pedido ─────────────────────────────
+    $group->get('/preparacion-pedido', function ($request, $response) {
+        $ctrl = new PreparacionPedidoController($GLOBALS['db']);
+        return $ctrl->index($request, $response);
+    });
+
+    $group->get('/preparacion-pedido/{nrodoc}/preparar', function ($request, $response, $args) {
+        $ctrl = new PreparacionPedidoController($GLOBALS['db']);
+        return $ctrl->preparar($request, $response, $args);
+    });
+
+    $group->post('/preparacion-pedido/{nrodoc}/preparar', function ($request, $response, $args) {
+        $ctrl = new PreparacionPedidoController($GLOBALS['db']);
+        return $ctrl->guardar($request, $response, $args);
     });
 
     $group->get('/api/planilla-pedidos', function ($request, $response) {

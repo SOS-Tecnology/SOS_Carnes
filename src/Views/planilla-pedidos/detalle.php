@@ -149,6 +149,31 @@ $todosListos = $totalItems > 0 && $itemsCompletos >= $totalItems;
         transition: background .15s;
     }
     .btn-volver:hover { background: #d0d0d0; }
+
+    /* ── Tabla con scroll horizontal en tablet ───────────── */
+    .det-table-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        border-radius: .4rem;
+    }
+    /* ── Touch targets para botones de acción ────────────── */
+    @media (max-width: 1280px) {
+        .det-body { padding: .75rem; }
+        .det-table { font-size: .85rem; }
+        .det-table thead th { padding: .65rem .6rem; font-size: .8rem; }
+        .det-table td { padding: .65rem .6rem; }
+        .btn-accion {
+            min-height: 48px;
+            min-width: 110px;
+            font-size: .88rem;
+            padding: .65rem 1.1rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .det-footer { margin-top: 1.1rem; }
+        .btn-volver { min-height: 44px; font-size: .85rem; padding: .5rem 1.1rem; }
+    }
 </style>
 
 <div class="det-wrap">
@@ -180,6 +205,7 @@ $todosListos = $totalItems > 0 && $itemsCompletos >= $totalItems;
                 Este pedido no tiene ítems registrados.
             </div>
         <?php else: ?>
+        <div class="det-table-wrap">
         <table class="det-table">
             <thead>
                 <tr>
@@ -209,7 +235,7 @@ $todosListos = $totalItems > 0 && $itemsCompletos >= $totalItems;
                         <?= number_format($diferencia, 3) ?>
                     </td>
                     <td>
-                        <a href="/planilla-pedidos/<?= urlencode($pedido['nrodoc']) ?>/item/<?= (int)$it['numreg'] ?>"
+                        <a href="/planilla-pedidos/<?= urlencode($pedido['nrodoc']) ?>/item/<?= urlencode($it['registro']) ?>"
                            class="btn-accion"
                            style="background:<?= $est['bg'] ?>;color:<?= $est['text'] ?>;"
                            onmouseover="this.style.background='<?= $est['hover'] ?>'"
@@ -221,6 +247,7 @@ $todosListos = $totalItems > 0 && $itemsCompletos >= $totalItems;
                 <?php endforeach; ?>
             </tbody>
         </table>
+        </div><!-- /det-table-wrap -->
         <?php endif; ?>
     </div>
 
