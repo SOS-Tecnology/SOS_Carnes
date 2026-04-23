@@ -9,192 +9,29 @@ function estadoPedido(int $total, int $completos, int $iniciados): array
     }
     return ['dot' => '#ca8a04', 'label' => 'Le faltan ítems'];
 }
+
+$summary = ['total' => count($pedidos), 'sinProcesar' => 0, 'faltanItems' => 0, 'listosCerrar' => 0];
+foreach ($pedidos as $p) {
+    $est = estadoPedido((int)$p['total_items'], (int)$p['items_completos'], (int)$p['items_iniciados']);
+    if ($est['dot'] === '#dc2626') {
+        $summary['sinProcesar']++;
+    } elseif ($est['dot'] === '#ca8a04') {
+        $summary['faltanItems']++;
+    } elseif ($est['dot'] === '#16a34a') {
+        $summary['listosCerrar']++;
+    }
+}
+
 ?>
 
-<style>
-    .pp-header {
-        background: #1a4dad;
-        color: #fff;
-        padding: .6rem 1.2rem;
-        border-radius: .5rem .5rem 0 0;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        font-weight: 600;
-        font-size: .95rem;
-        letter-spacing: .01em;
-    }
-    .pp-body {
-        background: #e8eaf0;
-        border: 1px solid #b0b8d0;
-        border-top: none;
-        border-radius: 0 0 .5rem .5rem;
-        padding: 1rem;
-        min-height: 260px;
-    }
-    .pp-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-        gap: .75rem;
-    }
-    .pp-card {
-        background: #fffde4;
-        border: 2px solid #d4a800;
-        border-radius: .45rem;
-        padding: .7rem .8rem .6rem;
-        cursor: pointer;
-        transition: box-shadow .15s, transform .1s;
-        position: relative;
-        user-select: none;
-    }
-    .pp-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.18); transform: translateY(-1px); }
-    .pp-card.cerrando {
-        opacity: .45;
-        pointer-events: none;
-        border-color: #aaa;
-        background: #f0f0f0;
-    }
-    .pp-card-title {
-        font-weight: 700;
-        font-size: .78rem;
-        color: #1a2e1a;
-        text-align: center;
-        margin-bottom: .35rem;
-        line-height: 1.2;
-    }
-    .pp-card-info {
-        font-size: .72rem;
-        color: #444;
-        text-align: center;
-        line-height: 1.5;
-    }
-    .pp-card-actions {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: .4rem;
-        margin-top: .55rem;
-    }
-    .btn-cerrar {
-        display: flex;
-        align-items: center;
-        gap: .25rem;
-        background: #c0392b;
-        color: #fff;
-        border: none;
-        border-radius: .3rem;
-        font-size: .68rem;
-        font-weight: 600;
-        padding: .28rem .55rem;
-        cursor: pointer;
-        transition: background .15s;
-    }
-    .btn-cerrar:hover { background: #a93226; }
-    .btn-estado {
-        display: flex;
-        align-items: center;
-        gap: .25rem;
-        background: #f5e642;
-        border: 1.5px solid #b8a800;
-        border-radius: .3rem;
-        font-size: .68rem;
-        font-weight: 600;
-        padding: .28rem .55rem;
-        cursor: default;
-        color: #333;
-    }
-    .dot {
-        width: 11px; height: 11px;
-        border-radius: 50%;
-        display: inline-block;
-        flex-shrink: 0;
-        border: 1.5px solid rgba(0,0,0,.2);
-    }
-    .pp-legend {
-        border: 2px solid #c0392b;
-        border-radius: .4rem;
-        padding: .55rem .9rem;
-        margin-top: .9rem;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        flex-wrap: wrap;
-        gap: .5rem;
-    }
-    .pp-legend-items {
-        display: flex;
-        flex-wrap: wrap;
-        gap: .4rem .9rem;
-    }
-    .pp-legend-item {
-        display: flex;
-        align-items: center;
-        gap: .35rem;
-        font-size: .75rem;
-        color: #222;
-        font-weight: 500;
-    }
-    .pp-legend-title {
-        font-weight: 700;
-        font-size: .8rem;
-        color: #c0392b;
-        margin-right: .4rem;
-    }
-    .pp-refresh {
-        font-size: .7rem;
-        color: #666;
-        display: flex;
-        align-items: center;
-        gap: .3rem;
-    }
-    .pp-spinner {
-        width: 12px; height: 12px;
-        border: 2px solid #aaa;
-        border-top-color: #1a4dad;
-        border-radius: 50%;
-        display: none;
-        animation: spin .7s linear infinite;
-    }
-    .pp-spinner.active { display: inline-block; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .pp-empty {
-        text-align: center;
-        color: #888;
-        font-size: .85rem;
-        padding: 2rem 0;
-    }
-
-    /* ── Tablet: touch targets ≥44px ──────────────────────── */
-    @media (max-width: 1280px) {
-        .pp-grid {
-            grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-            gap: 1rem;
-        }
-        .pp-card { padding: 1rem 1rem .85rem; }
-        .pp-card-title { font-size: .92rem; }
-        .pp-card-info  { font-size: .82rem; }
-        .pp-card-actions { gap: .55rem; margin-top: .7rem; }
-        .btn-cerrar {
-            font-size: .8rem;
-            padding: .55rem .85rem;
-            min-height: 44px;
-            border-radius: .4rem;
-        }
-        .btn-estado {
-            font-size: .8rem;
-            padding: .55rem .75rem;
-            min-height: 44px;
-            border-radius: .4rem;
-        }
-        .dot { width: 13px; height: 13px; }
-    }
-</style>
+<link rel="stylesheet" href="/css/planilla-pedidos.css">
 
 <!-- Header tipo cliente -->
-<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem;">
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:.75rem;">
     <a href="/dashboard_home"
-       class="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+       class="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
+       style="font-weight:600;color:#1f2937;text-decoration:none;">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
         </svg>
         Volver
@@ -205,13 +42,47 @@ function estadoPedido(int $total, int $completos, int $iniciados): array
     </div>
 </div>
 
-<!-- Panel principal -->
-<div>
-    <div class="pp-header">
-        <span>Pedidos generados</span>
-        <span><?= htmlspecialchars($nomTipoCli ?? '') ?></span>
+<div class="pp-summary">
+    <div class="pp-summary-top">
+        <div>
+            <span class="pp-page-title">Pedidos generados</span>
+            <?php if (!empty($nomTipoCli)): ?>
+                <span class="pp-page-subtitle"><?= htmlspecialchars($nomTipoCli) ?></span>
+            <?php endif; ?>
+        </div>
     </div>
-    <div class="pp-body">
+    <div class="pp-stat-grid">
+        <div class="pp-stat-card">
+            <span class="pp-stat-value"><?= $summary['total'] ?></span>
+            <span class="pp-stat-label">Total pedidos</span>
+        </div>
+        <div class="pp-stat-card">
+            <span class="pp-stat-value"><?= $summary['sinProcesar'] ?></span>
+            <span class="pp-stat-label">Sin procesar</span>
+        </div>
+        <div class="pp-stat-card">
+            <span class="pp-stat-value"><?= $summary['faltanItems'] ?></span>
+            <span class="pp-stat-label">Faltan ítems</span>
+        </div>
+        <div class="pp-stat-card">
+            <span class="pp-stat-value"><?= $summary['listosCerrar'] ?></span>
+            <span class="pp-stat-label">Listos p/ cerrar</span>
+        </div>
+    </div>
+    <div class="pp-summary-controls">
+        <div class="pp-search">
+            <input id="search-input" type="search" placeholder="Buscar cliente o documento..." aria-label="Buscar cliente o documento" />
+        </div>
+        <div class="pp-filter-group">
+            <button type="button" class="pp-filter-btn active" data-filter="all">Todos</button>
+            <button type="button" class="pp-filter-btn" data-filter="sinprocesar">Sin procesar</button>
+            <button type="button" class="pp-filter-btn" data-filter="incompletos">Incompletos</button>
+            <button type="button" class="pp-filter-btn" data-filter="listos">Listos</button>
+        </div>
+    </div>
+</div>
+
+<div class="pp-body">
         <div class="pp-grid" id="pedidos-grid">
             <?php if (empty($pedidos)): ?>
                 <div class="pp-empty" style="grid-column:1/-1">
@@ -226,15 +97,26 @@ function estadoPedido(int $total, int $completos, int $iniciados): array
                     );
                     $nrodoc = str_pad($p['nrodoc'], 8, '0', STR_PAD_LEFT);
                 ?>
+                <?php
+                    $status = 'sinprocesar';
+                    if ($est['dot'] === '#ca8a04') {
+                        $status = 'incompletos';
+                    } elseif ($est['dot'] === '#16a34a') {
+                        $status = 'listos';
+                    }
+                    $searchText = htmlspecialchars(strtolower($p['nomcli'] . ' ' . $nrodoc), ENT_QUOTES, 'UTF-8');
+                ?>
                 <div class="pp-card"
                      id="card-<?= htmlspecialchars($p['nrodoc']) ?>"
                      data-completo="<?= ($est['dot'] === '#16a34a') ? '1' : '0' ?>"
+                     data-status="<?= $status ?>"
+                     data-search="<?= $searchText ?>"
                      onclick="abrirPedido('<?= htmlspecialchars($p['nrodoc']) ?>')"
                      title="Ver detalle del pedido">
                     <div class="pp-card-title"><?= htmlspecialchars($p['nomcli']) ?></div>
                     <div class="pp-card-info">
-                        Documento: <?= htmlspecialchars($nrodoc) ?><br>
-                        Fecha Entrega: <?= htmlspecialchars($p['fecentrega_fmt']) ?>
+                        <span>Doc: <?= htmlspecialchars($nrodoc) ?></span>
+                        <span>Entrega: <?= htmlspecialchars($p['fecentrega_fmt']) ?></span>
                     </div>
                     <div class="pp-card-actions">
                         <button class="btn-cerrar"
@@ -246,45 +128,41 @@ function estadoPedido(int $total, int $completos, int $iniciados): array
                             </svg>
                             Cerrar pedido
                         </button>
-                        <span class="btn-estado">
+                        <span class="btn-estado" data-status="<?= $status ?>">
                             <span class="dot" style="background:<?= $est['dot'] ?>;"></span>
-                            Estado del pedido
+                            <?= htmlspecialchars($est['label']) ?>
                         </span>
                     </div>
                 </div>
                 <?php endforeach; ?>
             <?php endif; ?>
         </div>
-    </div>
-</div>
 
-<!-- Leyenda + salir -->
-<div class="pp-legend">
-    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:.4rem .9rem;">
-        <span class="pp-legend-title">Convenciones</span>
-        <div class="pp-legend-items">
-            <span class="pp-legend-item">
-                <span class="dot" style="background:#dc2626;"></span> Pedido sin procesar
-            </span>
-            <span class="pp-legend-item">
-                <span class="dot" style="background:#ca8a04;"></span> Pedido le faltan ítems
-            </span>
-            <span class="pp-legend-item">
-                <span class="dot" style="background:#16a34a;"></span> Pedido procesado sin cerrar
-            </span>
+        <!-- Leyenda Integrada -->
+        <div class="pp-legend-wrapper">
+            <div class="pp-legend">
+                <span class="pp-legend-title">Convenciones</span>
+                <div class="pp-legend-items">
+                    <span class="pp-legend-item">
+                        <span class="dot" style="background:#dc2626;"></span> Pedido sin procesar
+                    </span>
+                    <span class="pp-legend-item">
+                        <span class="dot" style="background:#ca8a04;"></span> Pedido le faltan ítems
+                    </span>
+                    <span class="pp-legend-item">
+                        <span class="dot" style="background:#16a34a;"></span> Pedido procesado sin cerrar
+                    </span>
+                </div>
+            </div>
+            <a href="/dashboard_home" class="pp-exit-btn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                </svg>
+                Salir de pedidos
+            </a>
         </div>
     </div>
-    <a href="/dashboard_home"
-       style="background:#e0e0e0;border:1px solid #999;border-radius:.35rem;
-              padding:.3rem .8rem;font-size:.78rem;font-weight:600;color:#333;
-              text-decoration:none;display:flex;align-items:center;gap:.3rem;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
-        </svg>
-        Salir de pedidos
-    </a>
-</div>
 
 <script>
 // Plantilla para construir una tarjeta desde JSON
@@ -302,13 +180,18 @@ function buildCard(p) {
     const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
     const completo = (completos >= total && total > 0) ? '1' : '0';
+    const status = dot === '#dc2626' ? 'sinprocesar' : dot === '#ca8a04' ? 'incompletos' : 'listos';
+    const searchText = esc((p.nomcli || '') + ' ' + nrodoc).toLowerCase();
+    const label = dot === '#dc2626' ? 'Sin procesar' : dot === '#ca8a04' ? 'Faltan ítems' : 'Procesado sin cerrar';
     return `<div class="pp-card" id="card-${esc(p.nrodoc)}"
                  data-completo="${completo}"
+                 data-status="${status}"
+                 data-search="${searchText}"
                  onclick="abrirPedido('${esc(p.nrodoc)}')" title="Ver detalle del pedido">
         <div class="pp-card-title">${esc(p.nomcli)}</div>
         <div class="pp-card-info">
-            Documento: ${esc(nrodoc)}<br>
-            Fecha Entrega: ${esc(p.fecentrega_fmt)}
+            <span>Doc: ${esc(nrodoc)}</span>
+            <span>Entrega: ${esc(p.fecentrega_fmt)}</span>
         </div>
         <div class="pp-card-actions">
             <button class="btn-cerrar"
@@ -319,9 +202,9 @@ function buildCard(p) {
                 </svg>
                 Cerrar pedido
             </button>
-            <span class="btn-estado">
+            <span class="btn-estado" data-status="${status}">
                 <span class="dot" style="background:${dot};"></span>
-                Estado del pedido
+                ${label}
             </span>
         </div>
     </div>`;
@@ -357,15 +240,53 @@ function cerrarPedido(e, nrodoc) {
 function checkEmpty() {
     const grid = document.getElementById('pedidos-grid');
     if (!grid) return;
-    const cards = grid.querySelectorAll('.pp-card:not(.cerrando)');
+    const visibleCards = [...grid.querySelectorAll('.pp-card:not(.cerrando)')]
+        .filter(card => window.getComputedStyle(card).display !== 'none');
     const empties = grid.querySelectorAll('.pp-empty');
-    if (cards.length === 0 && empties.length === 0) {
+    if (visibleCards.length === 0 && empties.length === 0) {
         grid.insertAdjacentHTML('beforeend',
             '<div class="pp-empty" style="grid-column:1/-1">No hay pedidos pendientes por alistar.</div>');
+    } else if (visibleCards.length > 0) {
+        empties.forEach(empty => empty.remove());
     }
 }
 
-// Polling: cada 30 s solicita la lista actualizada
+function applyFilters() {
+    const searchInput = document.getElementById('search-input');
+    const query = (searchInput?.value || '').trim().toLowerCase();
+    const filterBtn = document.querySelector('.pp-filter-btn.active');
+    const activeFilter = filterBtn?.dataset.filter || 'all';
+    const grid = document.getElementById('pedidos-grid');
+    if (!grid) return;
+
+    [...grid.querySelectorAll('.pp-card')].forEach(card => {
+        const status = card.dataset.status || 'all';
+        const searchText = (card.dataset.search || '').toLowerCase();
+        const matchesStatus = activeFilter === 'all' || status === activeFilter;
+        const matchesSearch = query === '' || searchText.includes(query);
+        card.style.display = matchesStatus && matchesSearch ? '' : 'none';
+    });
+
+    checkEmpty();
+}
+
+function updateFilters() {
+    applyFilters();
+}
+
+const searchInputEl = document.getElementById('search-input');
+if (searchInputEl) {
+    searchInputEl.addEventListener('input', updateFilters);
+}
+
+document.querySelectorAll('.pp-filter-btn').forEach(button => {
+    button.addEventListener('click', () => {
+        document.querySelectorAll('.pp-filter-btn').forEach(btn => btn.classList.remove('active'));
+        button.classList.add('active');
+        updateFilters();
+    });
+});
+
 let knownIds = new Set([...document.querySelectorAll('.pp-card')].map(c => c.id.replace('card-','')));
 
 function pollPedidos() {
@@ -413,7 +334,7 @@ function pollPedidos() {
                 }
             });
 
-            checkEmpty();
+            updateFilters();
             const now = new Date();
             txt.textContent = 'Actualizado ' + now.getHours().toString().padStart(2,'0')
                             + ':' + now.getMinutes().toString().padStart(2,'0')
