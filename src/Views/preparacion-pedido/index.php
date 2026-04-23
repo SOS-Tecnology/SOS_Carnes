@@ -69,6 +69,11 @@ $nrodocFmt = fn(string $n): string => str_pad($n, 8, '0', STR_PAD_LEFT);
         box-shadow: 0 2px 5px rgba(0,0,0,.15);
     }
     .btn-preparar:hover { background: #163fa0; transform: translateY(-1px); }
+    .btn-en-proceso {
+        background: #f59e0b;
+        color: #fff;
+    }
+    .btn-en-proceso:hover { background: #d97706; transform: translateY(-1px); }
     .pp2-empty {
         text-align: center;
         color: #888;
@@ -133,16 +138,23 @@ $nrodocFmt = fn(string $n): string => str_pad($n, 8, '0', STR_PAD_LEFT);
                         <td class="center"><?= htmlspecialchars($p['codtipocli']) ?></td>
                         <td class="center"><?= htmlspecialchars($p['fecentrega_fmt']) ?></td>
                         <td class="center">
+                            <?php
+                            $btnClass = 'btn-preparar';
+                            $btnText = 'Preparar';
+
+                            if (!empty($p['en_proceso'])) {
+                                $btnClass .= ' btn-en-proceso';
+                                $btnText = 'En Proceso';
+                            }
+                            ?>
                             <a href="/preparacion-pedido/<?= urlencode($p['nrodoc']) ?>/preparar"
-                               class="btn-preparar">
+                               class="<?= $btnClass ?>">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
                                      stroke="currentColor" stroke-width="2.5">
                                     <path stroke-linecap="round" stroke-linejoin="round"
-                                          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0
-                                             002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2
-                                             0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                                          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
                                 </svg>
-                                Preparar
+                                <?= $btnText ?>
                             </a>
                         </td>
                     </tr>

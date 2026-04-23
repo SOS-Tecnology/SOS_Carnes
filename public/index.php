@@ -245,6 +245,11 @@ $app->group('', function ($group) {
         return $ctrl->guardar($request, $response, $args);
     });
 
+    $group->post('/preparacion-pedido/{nrodoc}/cerrar', function ($request, $response, $args) {
+        $ctrl = new PreparacionPedidoController($GLOBALS['db']);
+        return $ctrl->cerrar($request, $response, $args);
+    });
+
     // ── Sticker para despacho ─────────────────────────────
     $group->get('/sticker/generar', function ($request, $response) {
         $ctrl = new StickerController();

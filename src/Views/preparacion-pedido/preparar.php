@@ -12,6 +12,18 @@ function normalizarComencpo(string $raw): string {
     );
     return implode("\n", $lines);
 }
+
+// Mostrar mensajes de sesión
+if (isset($_SESSION['success'])) {
+    echo "<script>document.addEventListener('DOMContentLoaded', () => mostrarAlertaAmable('Éxito', '" . addslashes($_SESSION['success']) . "', 'success'));</script>";
+    unset($_SESSION['success']);
+}
+if (isset($_SESSION['errors'])) {
+    foreach ($_SESSION['errors'] as $error) {
+        echo "<script>document.addEventListener('DOMContentLoaded', () => mostrarAlertaAmable('Error', '" . addslashes($error) . "', 'error'));</script>";
+    }
+    unset($_SESSION['errors']);
+}
 ?>
 
 <style>
@@ -124,6 +136,13 @@ function normalizarComencpo(string $raw): string {
         align-items: center; justify-content: space-between;
         flex-wrap: wrap; gap: .5rem;
     }
+    
+    .prep-footer-group {
+        display: flex;
+        gap: .5rem;
+        align-items: center;
+    }
+    
     .btn-generar {
         display: flex; align-items: center; gap: .5rem;
         background: #15803d; color: #fff; border: none;
@@ -134,6 +153,18 @@ function normalizarComencpo(string $raw): string {
         transition: background .15s, transform .1s;
     }
     .btn-generar:hover { background: #166534; transform: translateY(-1px); }
+    
+    .btn-cierra-planilla {
+        display: flex; align-items: center; gap: .5rem;
+        background: #7c3aed; color: #fff; border: none;
+        border-radius: .45rem; padding: .7rem 1.2rem;
+        font-size: .88rem; font-weight: 600; cursor: pointer;
+        letter-spacing: .02em;
+        box-shadow: 0 3px 10px rgba(124,58,237,.3);
+        transition: background .15s, transform .1s;
+    }
+    .btn-cierra-planilla:hover { background: #6d28d9; transform: translateY(-1px); }
+    
     .btn-volver {
         display: flex; align-items: center; gap: .3rem;
         background: #e0e0e0; border: 1px solid #999;
@@ -191,6 +222,7 @@ function normalizarComencpo(string $raw): string {
     <form method="POST" action="/preparacion-pedido/<?= $nrodocUrl ?>/preparar"
           id="form-prep" onsubmit="return validarForm()">
 
+
         <div class="prep-body">
 
             <?php foreach ($items as $idx => $it):
@@ -199,8 +231,16 @@ function normalizarComencpo(string $raw): string {
                 $alistado     = (float)$it['total_alistado'];
                 $diff         = $solicitado - $alistado;
                 $diffClass    = $diff > 0.001 ? 'amber' : ($diff < -0.001 ? 'red' : 'green');
-                $propuesta    = number_format($alistado, 3, '.', '');
+                
+                // Si existe AP previa, usar peso del AP; sino, usar alistado
+                $registro_key = trim($it['registro']);
+                if (!empty($pesosAP) && isset($pesosAP[$registro_key])) {
+                    $propuesta = number_format($pesosAP[$registro_key], 3, '.', '');
+                } else {
+                    $propuesta = number_format($alistado, 3, '.', '');
+                }
             ?>
+
             <div class="item-card">
                 <!-- Hidden fields para identificar el ítem -->
                 <input type="hidden" name="registros[]" value="<?= htmlspecialchars($it['registro']) ?>">
@@ -260,13 +300,25 @@ function normalizarComencpo(string $raw): string {
                 </svg>
                 Cancelar
             </a>
-            <button type="submit" class="btn-generar">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round"
-                          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-                Confirmar y generar AP
-            </button>
+            
+            <div class="prep-footer-group">
+                <form method="POST" action="/preparacion-pedido/<?= $nrodocUrl ?>/cerrar" style="margin: 0;">
+                    <button type="submit" class="btn-cierra-planilla" onclick="return confirm('¿Cerrar esta planilla? No podrá continuar editándola.')">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m7 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        Cierra Planilla
+                    </button>
+                </form>
+                
+                <button type="submit" class="btn-generar">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Confirmar y generar AP
+                </button>
+            </div>
         </div>
 
     </form>
