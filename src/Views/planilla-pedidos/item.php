@@ -324,7 +324,7 @@ $comencpo = implode("\n", $lines);
                 </svg>
                 Agregar entrada
             </div>
-            <form method="POST" action="/planilla-pedidos/<?= $nrodocUrl ?>/item/<?= $registroUrl ?>">
+            <form id="formAgregar" method="POST" action="/planilla-pedidos/<?= $nrodocUrl ?>/item/<?= $registroUrl ?>">
                 <div class="form-row">
                     <div class="form-group">
                         <label for="lote">Lote</label>
@@ -344,13 +344,37 @@ $comencpo = implode("\n", $lines);
                                placeholder="0.000" autocomplete="off" required autofocus>
                     </div>
                 </div>
-                <button type="submit" class="btn-agregar">
+                <button type="submit" id="btnAgregar" class="btn-agregar">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
                     </svg>
-                    Agregar
+                    <span id="btnText">Agregar</span>
                 </button>
             </form>
+
+            <script>
+            document.getElementById('formAgregar').addEventListener('submit', function(e) {
+                const btn = document.getElementById('btnAgregar');
+                const btnText = document.getElementById('btnText');
+                
+                // Si ya está procesando, prevenir envío
+                if (btn.disabled) {
+                    e.preventDefault();
+                    return;
+                }
+                
+                // Deshabilitar y mostrar estado de carga
+                btn.disabled = true;
+                btn.style.opacity = '0.7';
+                btn.style.cursor = 'not-allowed';
+                btnText.textContent = 'Procesando...';
+                
+                // Deshabilitar inputs también
+                document.getElementById('lote').disabled = true;
+                document.getElementById('temp').disabled = true;
+                document.getElementById('cantidad').disabled = true;
+            });
+            </script>
         </div>
 
     </div><!-- /item-body -->

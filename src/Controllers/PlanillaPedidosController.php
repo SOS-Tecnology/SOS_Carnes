@@ -145,52 +145,66 @@ class PlanillaPedidosController
             )->withStatus(302);
         }
 
-        // PV header + item info in one query
-        $itStmt = $this->db->pdo->prepare("
-            SELECT TRIM(cm.codr)    AS codr,
-                   TRIM(cm.descr)   AS descr,
-                   TRIM(cm.prefijo) AS prefijo
-            FROM cuerpomov cm
-            WHERE TRIM(cm.tm)        = 'PV'
-              AND TRIM(cm.documento) = :doc
-              AND TRIM(cm.registro)  = :registro
-            LIMIT 1
-        ");
-        $itStmt->execute([':doc' => $nrodoc, ':registro' => $registro]);
-        $item = $itStmt->fetch(\PDO::FETCH_ASSOC);
-        if (!$item) {
-            return $response->withHeader('Location', '/planilla-pedidos/' . urlencode($nrodoc) . '/detalle')->withStatus(302);
+        try {
+            // Inicia transacción para garantizar consistencia
+            $this->db->pdo->beginTransaction();
+
+            // PV header + item info in one query
+            $itStmt = $this->db->pdo->prepare("
+                SELECT TRIM(cm.codr)    AS codr,
+                       TRIM(cm.descr)   AS descr,
+                       TRIM(cm.prefijo) AS prefijo
+                FROM cuerpomov cm
+                WHERE TRIM(cm.tm)        = 'PV'
+                  AND TRIM(cm.documento) = :doc
+                  AND TRIM(cm.registro)  = :registro
+                LIMIT 1
+            ");
+            $itStmt->execute([':doc' => $nrodoc, ':registro' => $registro]);
+            $item = $itStmt->fetch(\PDO::FETCH_ASSOC);
+            if (!$item) {
+                $this->db->pdo->rollBack();
+                return $response->withHeader('Location', '/planilla-pedidos/' . urlencode($nrodoc) . '/detalle')->withStatus(302);
+            }
+
+            // Next itemre for this registro
+            $nrStmt = $this->db->pdo->prepare("
+                SELECT COALESCE(MAX(CAST(itemre AS UNSIGNED)), 0) + 1
+                FROM itemmov
+                WHERE TRIM(tm) = 'PV' AND TRIM(prefijo) = :prefijo
+                  AND TRIM(documento) = :doc AND TRIM(registro) = :registro
+            ");
+            $nrStmt->execute([':prefijo' => $item['prefijo'], ':doc' => $nrodoc, ':registro' => $registro]);
+            $newItemre = (string)($nrStmt->fetchColumn() ?: 1);
+
+            $hora = date('H:i:s');
+
+            // Insertar en itemmov
+            $this->db->pdo->prepare("
+                INSERT INTO itemmov (tm, prefijo, documento, codr, descr, cantidad, lote, registro, itemre, temp, hora)
+                VALUES ('PV', :prefijo, :doc, :codr, :descr, :cantidad, :lote, :registro, :itemre, :temp, :hora)
+            ")->execute([
+                ':prefijo'  => trim($item['prefijo']),
+                ':doc'      => $nrodoc,
+                ':codr'     => $item['codr'],
+                ':descr'    => $item['descr'],
+                ':cantidad' => $cantidad,
+                ':lote'     => $lote,
+                ':registro' => $registro,
+                ':itemre'   => $newItemre,
+                ':temp'     => $temp,
+                ':hora'     => $hora,
+            ]);
+
+            // Recalcular cantent en la misma transacción
+            $this->recalcCantent($nrodoc, $item['prefijo'], $item['codr'], $registro);
+
+            // Commit transacción
+            $this->db->pdo->commit();
+        } catch (\Exception $e) {
+            $this->db->pdo->rollBack();
+            throw $e;
         }
-
-        // Next itemre for this registro
-        $nrStmt = $this->db->pdo->prepare("
-            SELECT COALESCE(MAX(CAST(itemre AS UNSIGNED)), 0) + 1
-            FROM itemmov
-            WHERE TRIM(tm) = 'PV' AND TRIM(prefijo) = :prefijo
-              AND TRIM(documento) = :doc AND TRIM(registro) = :registro
-        ");
-        $nrStmt->execute([':prefijo' => $item['prefijo'], ':doc' => $nrodoc, ':registro' => $registro]);
-        $newItemre = (string)($nrStmt->fetchColumn() ?: 1);
-
-        $hora = date('H:i:s');
-
-        $this->db->pdo->prepare("
-            INSERT INTO itemmov (tm, prefijo, documento, codr, descr, cantidad, lote, registro, itemre, temp, hora)
-            VALUES ('PV', :prefijo, :doc, :codr, :descr, :cantidad, :lote, :registro, :itemre, :temp, :hora)
-        ")->execute([
-            ':prefijo'  => trim($item['prefijo']),
-            ':doc'      => $nrodoc,
-            ':codr'     => $item['codr'],
-            ':descr'    => $item['descr'],
-            ':cantidad' => $cantidad,
-            ':lote'     => $lote,
-            ':registro' => $registro,
-            ':itemre'   => $newItemre,
-            ':temp'     => $temp,
-            ':hora'     => $hora,
-        ]);
-
-        $this->recalcCantent($nrodoc, $item['prefijo'], $item['codr'], $registro);
 
         return $response->withHeader('Location',
             '/planilla-pedidos/' . urlencode($nrodoc) . '/item/' . urlencode($registro)
@@ -203,38 +217,48 @@ class PlanillaPedidosController
         $registro = trim($args['registro']);
         $hora     = trim($request->getParsedBody()['hora'] ?? '');
 
-        $itStmt = $this->db->pdo->prepare("
-            SELECT TRIM(cm.codr) AS codr, TRIM(cm.prefijo) AS prefijo
-            FROM cuerpomov cm
-            WHERE TRIM(cm.tm)        = 'PV'
-              AND TRIM(cm.documento) = :doc
-              AND TRIM(cm.registro)  = :registro
-            LIMIT 1
-        ");
-        $itStmt->execute([':doc' => $nrodoc, ':registro' => $registro]);
-        $item = $itStmt->fetch(\PDO::FETCH_ASSOC);
-        if (!$item) {
-            return $response->withHeader('Location', '/planilla-pedidos/' . urlencode($nrodoc) . '/detalle')->withStatus(302);
+        try {
+            $this->db->pdo->beginTransaction();
+
+            $itStmt = $this->db->pdo->prepare("
+                SELECT TRIM(cm.codr) AS codr, TRIM(cm.prefijo) AS prefijo
+                FROM cuerpomov cm
+                WHERE TRIM(cm.tm)        = 'PV'
+                  AND TRIM(cm.documento) = :doc
+                  AND TRIM(cm.registro)  = :registro
+                LIMIT 1
+            ");
+            $itStmt->execute([':doc' => $nrodoc, ':registro' => $registro]);
+            $item = $itStmt->fetch(\PDO::FETCH_ASSOC);
+            if (!$item) {
+                $this->db->pdo->rollBack();
+                return $response->withHeader('Location', '/planilla-pedidos/' . urlencode($nrodoc) . '/detalle')->withStatus(302);
+            }
+
+            $this->db->pdo->prepare("
+                DELETE FROM itemmov
+                WHERE TRIM(tm)        = 'PV'
+                  AND TRIM(prefijo)   = :prefijo
+                  AND TRIM(documento) = :doc
+                  AND TRIM(codr)      = :codr
+                  AND TRIM(registro)  = :registro
+                  AND hora            = :hora
+                LIMIT 1
+            ")->execute([
+                ':prefijo'  => $item['prefijo'],
+                ':doc'      => $nrodoc,
+                ':codr'     => $item['codr'],
+                ':registro' => $registro,
+                ':hora'     => $hora,
+            ]);
+
+            $this->recalcCantent($nrodoc, $item['prefijo'], $item['codr'], $registro);
+
+            $this->db->pdo->commit();
+        } catch (\Exception $e) {
+            $this->db->pdo->rollBack();
+            throw $e;
         }
-
-        $this->db->pdo->prepare("
-            DELETE FROM itemmov
-            WHERE TRIM(tm)        = 'PV'
-              AND TRIM(prefijo)   = :prefijo
-              AND TRIM(documento) = :doc
-              AND TRIM(codr)      = :codr
-              AND TRIM(registro)  = :registro
-              AND hora            = :hora
-            LIMIT 1
-        ")->execute([
-            ':prefijo'  => $item['prefijo'],
-            ':doc'      => $nrodoc,
-            ':codr'     => $item['codr'],
-            ':registro' => $registro,
-            ':hora'     => $hora,
-        ]);
-
-        $this->recalcCantent($nrodoc, $item['prefijo'], $item['codr'], $registro);
 
         return $response->withHeader('Location',
             '/planilla-pedidos/' . urlencode($nrodoc) . '/item/' . urlencode($registro)
@@ -344,7 +368,7 @@ class PlanillaPedidosController
                 SELECT a.documento, prefijo, tm, fecha, fechent, codcp, b.codtipocli, estado
                 FROM cabezamov a
                 INNER JOIN geclientes b ON a.codcp = b.codcli
-                WHERE tm = 'PV' AND a.estado IN ('M', 'C') AND TRIM(a.estadorm) <> 'A'
+                WHERE tm = 'PV' AND a.estado IN ('C') AND TRIM(a.estadorm) <> 'A'
             )
             SELECT
                 TRIM(c.documento)                                                          AS nrodoc,

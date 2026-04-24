@@ -26,7 +26,7 @@ class PreparacionPedidoController
             FROM   cabezamov c
             INNER  JOIN geclientes g ON c.codcp = g.codcli
             WHERE  TRIM(c.tm) = 'PV'
-              AND  c.estado   = 'C'
+              AND  c.estado   in ('O')
               AND  TRIM(c.estadorm) = 'A'
               {$whereExtra}
             ORDER  BY c.fechent ASC
@@ -51,8 +51,12 @@ class PreparacionPedidoController
             $p['en_proceso'] = ($apData['cnt'] ?? 0) > 0 ? 1 : 0;
         }
 
-        return renderView($response, __DIR__ . '/../Views/preparacion-pedido/index.php',
-            'Preparación de Pedido', ['pedidos' => $pedidos]);
+        return renderView(
+            $response,
+            __DIR__ . '/../Views/preparacion-pedido/index.php',
+            'Preparación de Pedido',
+            ['pedidos' => $pedidos]
+        );
     }
 
     public function preparar($request, $response, $args): mixed
@@ -76,7 +80,7 @@ class PreparacionPedidoController
             INNER  JOIN geclientes g ON c.codcp = g.codcli
             WHERE  TRIM(c.tm)      = 'PV'
               AND  TRIM(c.documento) = :doc
-              AND  c.estado        = 'C'
+              AND  c.estado        in ('O')
             LIMIT 1
         ");
         $cabStmt->execute([':doc' => $nrodoc]);
@@ -208,19 +212,30 @@ class PreparacionPedidoController
         $itemsStmt->execute([':prefijo' => $pedido['prefijo'], ':doc' => $nrodoc]);
         $items = $itemsStmt->fetchAll(\PDO::FETCH_ASSOC);
 
-        return renderView($response, __DIR__ . '/../Views/preparacion-pedido/preparar.php',
-            'Preparar Pedido', [
+        return renderView(
+            $response,
+            __DIR__ . '/../Views/preparacion-pedido/preparar.php',
+            'Preparar Pedido',
+            [
                 'pedido'      => $pedido,
                 'items'       => $items,
                 'pesosAP'     => $pesosAP,
                 'apExistente' => $apExistente
-            ]);
+            ]
+        );
     }
 
     public function guardar($request, $response, $args): mixed
     {
         $nrodoc    = trim($args['nrodoc']);
         $body      = $request->getParsedBody();
+        $accion    = $body['accion'] ?? '';  // Acción: 'cerrar' o vacío (guardar pesos)
+
+        // Si la acción es "cerrar", delegar al método cerrar
+        if ($accion === 'cerrar') {
+            return $this->cerrar($request, $response, $args);
+        }
+
         $registros = $body['registros'] ?? [];
         $pesos     = $body['pesos']     ?? [];
 
@@ -233,7 +248,7 @@ class PreparacionPedidoController
             FROM   cabezamov c
             WHERE  TRIM(c.tm)       = 'PV'
               AND  TRIM(c.documento) = :doc
-              AND  c.estado         = 'C'
+              AND  c.estado         = 'O'
               AND  TRIM(c.estadorm) = 'A'
             LIMIT 1
         ");
@@ -375,7 +390,6 @@ class PreparacionPedidoController
                     ':doc'        => $docAP,
                     ':pref'       => $prefAP,
                 ]);
-
             } else {
                 // Crear nueva AP
                 // Next AP document number
@@ -468,12 +482,17 @@ class PreparacionPedidoController
             $pdo->commit();
         } catch (\Exception $e) {
             $pdo->rollBack();
-            return $response->withHeader('Location',
+            return $response->withHeader(
+                'Location',
                 '/preparacion-pedido/' . urlencode($nrodoc) . '/preparar'
             )->withStatus(302);
         }
 
-        return $response->withHeader('Location', '/preparacion-pedido')->withStatus(302);
+        // Después de guardar exitosamente, mostrar modal de cierre
+        return $response->withHeader(
+            'Location',
+            '/preparacion-pedido/' . urlencode($nrodoc) . '/preparar?modalCierre=1'
+        )->withStatus(302);
     }
 
     /**
@@ -481,7 +500,14 @@ class PreparacionPedidoController
      */
     public function cerrar($request, $response, $args): mixed
     {
-        $nrodoc = trim($args['nrodoc']);
+        $nrodoc  = trim($args['nrodoc']);
+        $body    = $request->getParsedBody();
+        $prefijo = trim($body['prefijo'] ?? '');
+
+        if ($prefijo === '') {
+            $_SESSION['errors'] = ['Falta el prefijo del pedido.'];
+            return $response->withHeader('Location', '/preparacion-pedido')->withStatus(302);
+        }
 
         try {
             // Verificar que la PV exista
@@ -490,10 +516,11 @@ class PreparacionPedidoController
                        TRIM(c.prefijo)   AS prefijo
                 FROM   cabezamov c
                 WHERE  TRIM(c.tm)       = 'PV'
+                  AND  TRIM(c.prefijo) = :pref
                   AND  TRIM(c.documento) = :doc
                 LIMIT 1
             ");
-            $pvStmt->execute([':doc' => $nrodoc]);
+            $pvStmt->execute([':doc' => $nrodoc, ':pref' => $prefijo]);
             $pv = $pvStmt->fetch(\PDO::FETCH_ASSOC);
 
             if (!$pv) {
@@ -530,13 +557,14 @@ class PreparacionPedidoController
                   AND  TRIM(prefijo)   = :pref
             ")->execute([':doc' => $ap['doc_ap'], ':pref' => $ap['pref_ap']]);
 
-            // Cambiar estadorm del PV a 'C' para marcar como completado
+            // Cambiar estadorm del PV a 'R' para marcar como completado
             $this->db->pdo->prepare("
                 UPDATE cabezamov
-                SET    estadorm = 'C'
+                SET    estadorm = 'R'
                 WHERE  TRIM(tm)       = 'PV'
                   AND  TRIM(documento) = :doc
-            ")->execute([':doc' => $nrodoc]);
+                  AND  TRIM(prefijo)   = :pref
+            ")->execute([':doc' => $nrodoc, ':pref' => $prefijo]);
 
             $_SESSION['success'] = "Planilla cerrada correctamente.";
         } catch (\Exception $e) {
