@@ -108,6 +108,17 @@ $comencpo = implode("\n", $lines);
         box-sizing:border-box;transition:border-color .15s;
     }
     .form-group input:focus { outline:none;border-color:#1a4dad;box-shadow:0 0 0 3px rgba(26,77,173,.12); }
+    .input-with-btn { display:flex;gap:.35rem; }
+    .input-with-btn input { flex:1; }
+    .btn-qr-scan {
+        display:flex;align-items:center;justify-content:center;
+        width:48px;min-width:48px;height:48px;
+        background:#fff;border:1.5px solid #b0b8d0;border-radius:.35rem;
+        color:#1a4dad;cursor:pointer;transition:background .15s,border-color .15s;
+    }
+    .btn-qr-scan:hover { background:#eef2ff;border-color:#1a4dad; }
+    .btn-qr-scan:active { background:#dbe4ff; }
+    .btn-qr-scan svg { flex-shrink:0; }
     .form-group input.center { text-align:center; }
     .btn-agregar {
         display:flex;align-items:center;justify-content:center;gap:.4rem;
@@ -115,6 +126,7 @@ $comencpo = implode("\n", $lines);
         border-radius:.4rem;font-size:.88rem;font-weight:700;cursor:pointer;
         letter-spacing:.03em;transition:background .15s,transform .1s;
         box-shadow:0 3px 8px rgba(26,77,173,.25);
+        position:relative;z-index:10;
     }
     .btn-agregar:hover { background:#163fa0;transform:translateY(-1px); }
 
@@ -319,17 +331,25 @@ $comencpo = implode("\n", $lines);
         <!-- ── Agregar nueva entrada ── -->
         <div class="agregar-card">
             <div class="agregar-title">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;">
+                <!-- <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
-                </svg>
+                </svg> -->
                 Agregar entrada
             </div>
             <form id="formAgregar" method="POST" action="/planilla-pedidos/<?= $nrodocUrl ?>/item/<?= $registroUrl ?>">
                 <div class="form-row">
                     <div class="form-group">
                         <label for="lote">Lote</label>
-                        <input type="text" id="lote" name="lote"
-                               maxlength="15" autocomplete="off" placeholder="Ej. L-001">
+                        <div class="input-with-btn">
+                            <input type="text" id="lote" name="lote"
+                                   maxlength="15" autocomplete="off" placeholder="Ej. L-001">
+                            <button type="button" id="btnScanQr" class="btn-qr-scan" title="Escanear QR">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21V19a2 2 0 00-2-2H5"/>
+                                    <rect x="7" y="7" width="10" height="10" rx="1"/>
+                                </svg>
+                            </button>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label for="temp">Temp. °C</label>
@@ -344,7 +364,7 @@ $comencpo = implode("\n", $lines);
                                placeholder="0.000" autocomplete="off" required autofocus>
                     </div>
                 </div>
-                <button type="submit" id="btnAgregar" class="btn-agregar">
+                <button type="submit" id="btnAgregar" name="btnAgregar" class="btn-agregar">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
                     </svg>
@@ -352,28 +372,173 @@ $comencpo = implode("\n", $lines);
                 </button>
             </form>
 
+            <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
             <script>
-            document.getElementById('formAgregar').addEventListener('submit', function(e) {
-                const btn = document.getElementById('btnAgregar');
-                const btnText = document.getElementById('btnText');
+document.getElementById('formAgregar').addEventListener('submit', function(e) {
+    const btn = document.getElementById('btnAgregar');
+    const btnText = document.getElementById('btnText');
+    if (btn.disabled) {
+        e.preventDefault();
+        return;
+    }
+    btn.disabled = true;
+    btn.style.opacity = '0.7';
+    btn.style.cursor = 'not-allowed';
+    btnText.textContent = 'Procesando...';
+    setTimeout(function() {
+        document.getElementById('lote').disabled = true;
+        document.getElementById('temp').disabled = true;
+        document.getElementById('cantidad').disabled = true;
+    }, 0);
+});
+
+// ── Escaneo QR mejorado para iPad y otros dispositivos ──
+document.getElementById('btnScanQr').addEventListener('click', function() {
+    const overlay = document.createElement('div');
+    overlay.id = 'qr-overlay';
+    overlay.innerHTML = `
+        <div style="position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+            <div style="background:#fff;border-radius:12px;padding:1.5rem;max-width:90%;width:350px;text-align:center;">
+                <h3 style="margin:0 0 1rem;font-size:1.15rem;color:#1a4dad;">Escanear código QR</h3>
+                <div id="qr-reader" style="width:100%;min-height:280px;background:#f8f9fa;border-radius:8px;overflow:hidden;"></div>
+                <div id="qr-reader-msg" style="margin:.75rem 0 .5rem;font-size:.85rem;color:#666;">Iniciando cámara...</div>
+                <button type="button" id="btn-cancelar-qr" style="background:#e0e0e0;border:none;padding:.6rem 1.8rem;border-radius:6px;font-size:.95rem;cursor:pointer;margin-top:.5rem;">Cancelar</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    let escaneado = false;
+    const inputLote = document.getElementById('lote');
+    let html5QrCode = null;
+
+    function mostrarError(msg) {
+        const msgEl = document.getElementById('qr-reader-msg');
+        if (msgEl) msgEl.innerHTML = '<span style="color:#dc2626;">' + msg + '</span>';
+    }
+
+    function mostrarMsg(msg) {
+        const msgEl = document.getElementById('qr-reader-msg');
+        if (msgEl) msgEl.textContent = msg;
+    }
+
+    // Verificar que la librería esté cargada
+    if (typeof Html5Qrcode === 'undefined') {
+        mostrarError('Biblioteca no cargó. Recargue la página.');
+        return;
+    }
+
+    // Paso 1: Listar cámaras disponibles
+    mostrarMsg('Buscando cámaras...');
+    
+    Html5Qrcode.getCameras().then(function(cameras) {
+        if (!cameras || cameras.length === 0) {
+            mostrarError('No se detectaron cámaras.');
+            return;
+        }
+
+        // Buscar cámara trasera (iPad usualmente la tiene)
+        let cameraId = cameras[0].id;
+        const backCamera = cameras.find(function(cam) {
+            return cam.label.toLowerCase().includes('back') || 
+                   cam.label.toLowerCase().includes('rear') ||
+                   cam.label.toLowerCase().includes('trasera');
+        });
+        
+        if (backCamera) {
+            cameraId = backCamera.id;
+        }
+
+        mostrarMsg('Iniciando cámara...');
+        html5QrCode = new Html5Qrcode("qr-reader");
+
+        html5QrCode.start(
+            cameraId,
+            { fps: 10, qrbox: { width: 250, height: 250 } },
+            function(decodedText) {
+                if (escaneado) return;
+                escaneado = true;
                 
-                // Si ya está procesando, prevenir envío
-                if (btn.disabled) {
-                    e.preventDefault();
-                    return;
+                // Extraer lote: caracteres posición 20 al 28
+                const lote = decodedText.substring(19, 28).trim();
+                
+                if (lote) {
+                    inputLote.value = lote;
+                    inputLote.style.borderColor = '#16a34a';
+                    inputLote.style.background = '#f0fdf4';
+                    setTimeout(function() {
+                        inputLote.style.borderColor = '';
+                        inputLote.style.background = '';
+                    }, 2000);
+                    
+                    html5QrCode.stop().then(function() {
+                        overlay.remove();
+                    });
+                } else {
+                    mostrarError('QR válido pero sin lote en posición 20-28');
+                    escaneado = false;
                 }
-                
-                // Deshabilitar y mostrar estado de carga
-                btn.disabled = true;
-                btn.style.opacity = '0.7';
-                btn.style.cursor = 'not-allowed';
-                btnText.textContent = 'Procesando...';
-                
-                // Deshabilitar inputs también
-                document.getElementById('lote').disabled = true;
-                document.getElementById('temp').disabled = true;
-                document.getElementById('cantidad').disabled = true;
+            },
+            function(errorMessage) {
+                // Error de escaneo normal - ignorar
+            }
+        ).catch(function(err) {
+            console.error('Error cámara:', err);
+            if (err && err.toString().includes('Permission')) {
+                mostrarError('Permiso denegado. Active la cámara en Settings > Safari > Camera.');
+            } else if (err && err.toString().includes('NotAllowed')) {
+                mostrarError('Permiso bloquedo. Permite el acceso a la cámara en Safari.');
+            } else {
+                mostrarError('Error: ' + (err && err.message ? err.message : 'No se pudo iniciar'));
+            }
+        });
+    }).catch(function(err) {
+        console.error('Error getCameras:', err);
+        mostrarError('Error: ' + (err && err.message ? err.message : err));
+    });
+
+    // Cancelar
+    overlay.querySelector('#btn-cancelar-qr').addEventListener('click', function() {
+        escaneado = true;
+        if (html5QrCode) {
+            html5QrCode.stop().then(function() {
+                overlay.remove();
+            }).catch(function() {
+                overlay.remove();
             });
+        } else {
+            overlay.remove();
+        }
+    });
+});
+
+// ── Ocultar menú lateral en pantallas pequeñas ──
+(function() {
+    function hideSidebar() {
+        // Buscar el menú lateral por múltiples selectores
+        const sidebar = document.querySelector('.sidebar') || 
+                       document.getElementById('sidebar') ||
+                       document.querySelector('[class*="sidebar"]') ||
+                       document.querySelector('.menu-lateral') ||
+                       document.querySelector('#menu');
+        
+        if (sidebar) {
+            if (window.innerWidth < 768) {
+                sidebar.style.display = 'none';
+            } else {
+                sidebar.style.display = '';
+            }
+        }
+    }
+    
+    // Ejecutar al cargar y al cambiar tamaño
+    window.addEventListener('resize', hideSidebar);
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', hideSidebar);
+    } else {
+        hideSidebar();
+    }
+})();
             </script>
         </div>
 

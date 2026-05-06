@@ -68,6 +68,32 @@
         @media (max-width: 1024px) {
             main.flex-1 { padding: 0.65rem !important; }
         }
+        
+        /* ── Ocultar sidebar en pantallas pequeñas (≤768px) ──── */
+        @media (max-width: 768px) {
+            #sidebar { display: none !important; }
+            #sidebarToggle { display: none !important; }
+        }
+        
+        /* ── Botón flotante para mostrar menú en móvil ──── */
+        #mobileMenuBtn {
+            display: none;
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: #1a4dad;
+            color: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+        }
+        @media (max-width: 768px) {
+            #mobileMenuBtn { display: flex; }
+        }
     </style>
 </head>
 
@@ -202,13 +228,13 @@
         </aside>
 
         <!-- ── ÁREA DE TRABAJO ──────────────────────────────────── -->
-        <main class="flex-1 overflow-auto p-6">
+        <main class="flex-1 overflow-auto p-6 pb-20">
             <?= $content ?>
         </main>
 
     </div>
 
-    <footer class="bg-white border-t text-center py-3 text-xs text-gray-400">
+    <footer class="fixed bottom-0 left-0 right-0 z-50 bg-white border-t text-center py-3 text-xs text-gray-400 shadow-sm">
         &copy; <?= date('Y') ?> SOS Technology | SOS-Carnes
     </footer>
 
@@ -233,6 +259,19 @@
                 menu.classList.add('hidden');
             }
         });
+        
+        // ── Botón flotante para mostrar menú en móvil ──
+        const mobileBtn = document.createElement('button');
+        mobileBtn.id = 'mobileMenuBtn';
+        mobileBtn.innerHTML = '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>';
+        mobileBtn.title = 'Menú';
+        mobileBtn.onclick = function() {
+            const sidebar = document.getElementById('sidebar');
+            if (sidebar) {
+                sidebar.style.display = sidebar.style.display === 'none' ? '' : 'none';
+            }
+        };
+        document.body.appendChild(mobileBtn);
     </script>
 
 </body>

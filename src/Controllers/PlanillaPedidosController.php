@@ -185,19 +185,19 @@ class PlanillaPedidosController
                 VALUES ('PV', :prefijo, :doc, :codr, :descr, :cantidad, :lote, :registro, :itemre, :temp, :hora)
             ")->execute([
                 ':prefijo'  => trim($item['prefijo']),
-                ':doc'      => $nrodoc,
-                ':codr'     => $item['codr'],
-                ':descr'    => $item['descr'],
+                ':doc'      => trim($nrodoc),
+                ':codr'     => trim($item['codr']),
+                ':descr'    => trim($item['descr']),
                 ':cantidad' => $cantidad,
                 ':lote'     => $lote,
-                ':registro' => $registro,
+                ':registro' => trim($registro),
                 ':itemre'   => $newItemre,
                 ':temp'     => $temp,
                 ':hora'     => $hora,
             ]);
 
             // Recalcular cantent en la misma transacción
-            $this->recalcCantent($nrodoc, $item['prefijo'], $item['codr'], $registro);
+            $this->recalcCantent(trim($nrodoc), trim($item['prefijo']), trim($item['codr']), trim($registro));
 
             // Commit transacción
             $this->db->pdo->commit();
@@ -245,14 +245,14 @@ class PlanillaPedidosController
                   AND hora            = :hora
                 LIMIT 1
             ")->execute([
-                ':prefijo'  => $item['prefijo'],
-                ':doc'      => $nrodoc,
-                ':codr'     => $item['codr'],
-                ':registro' => $registro,
+                ':prefijo'  => trim($item['prefijo']),
+                ':doc'      => trim($nrodoc),
+                ':codr'     => trim($item['codr']),
+                ':registro' => trim($registro),
                 ':hora'     => $hora,
             ]);
 
-            $this->recalcCantent($nrodoc, $item['prefijo'], $item['codr'], $registro);
+            $this->recalcCantent(trim($nrodoc), trim($item['prefijo']), trim($item['codr']), trim($registro));
 
             $this->db->pdo->commit();
         } catch (\Exception $e) {
@@ -269,6 +269,11 @@ class PlanillaPedidosController
 
     private function recalcCantent(string $pvDoc, string $pvPrefijo, string $codr, string $registro): void
     {
+        $pvDoc     = trim($pvDoc);
+        $pvPrefijo = trim($pvPrefijo);
+        $codr      = trim($codr);
+        $registro  = trim($registro);
+
         $sumStmt = $this->db->pdo->prepare("
             SELECT COALESCE(SUM(cantidad), 0)
             FROM itemmov
@@ -320,6 +325,9 @@ class PlanillaPedidosController
 
     private function getItemmovEntries(string $pvDoc, string $pvPrefijo, string $codr, string $registro): array
     {
+        $codr     = trim($codr);
+        $registro = trim($registro);
+
         $stmt = $this->db->pdo->prepare("
             SELECT i.hora, i.lote, i.temp, i.cantidad
             FROM itemmov i
@@ -331,8 +339,8 @@ class PlanillaPedidosController
             ORDER BY i.hora
         ");
         $stmt->execute([
-            ':prefijo'  => $pvPrefijo,
-            ':doc'      => $pvDoc,
+            ':prefijo'  => trim($pvPrefijo),
+            ':doc'      => trim($pvDoc),
             ':codr'     => $codr,
             ':registro' => $registro,
         ]);

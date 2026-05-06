@@ -34,7 +34,7 @@ if (isset($_SESSION['errors'])) {
     }
 
     /* ── Header ── */
-    .prep-header {
+    .prep-wrap .prep-header {
         background: #1a4dad;
         color: #fff;
         padding: .65rem 1.2rem;
@@ -47,7 +47,7 @@ if (isset($_SESSION['errors'])) {
         flex-wrap: wrap;
     }
 
-    .prep-header .btn-back {
+    .prep-wrap .prep-header .btn-back {
         display: flex;
         align-items: center;
         gap: .25rem;
@@ -61,7 +61,7 @@ if (isset($_SESSION['errors'])) {
         flex-shrink: 0;
     }
 
-    .prep-header-info {
+    .prep-wrap .prep-header-info {
         display: flex;
         flex-wrap: wrap;
         gap: .15rem 1.2rem;
@@ -72,7 +72,7 @@ if (isset($_SESSION['errors'])) {
     }
 
     /* ── Body ── */
-    .prep-body {
+    .prep-wrap .prep-body {
         background: #f0f2f8;
         border: 1px solid #b0b8d0;
         border-top: none;
@@ -81,7 +81,7 @@ if (isset($_SESSION['errors'])) {
     }
 
     /* ── Item card ── */
-    .item-card {
+    .prep-wrap .item-card {
         background: #fff;
         border: 1px solid #d0d8ec;
         border-radius: .45rem;
@@ -90,18 +90,18 @@ if (isset($_SESSION['errors'])) {
         box-shadow: 0 2px 6px rgba(0, 0, 0, .05);
     }
 
-    .item-card:last-child {
+    .prep-wrap .item-card:last-child {
         margin-bottom: 0;
     }
 
-    .item-card-top {
+    .prep-wrap .item-card-top {
         display: flex;
         align-items: flex-start;
         gap: .8rem;
         margin-bottom: .5rem;
     }
 
-    .item-num {
+    .prep-wrap .item-num {
         background: #1a4dad;
         color: #fff;
         min-width: 26px;
@@ -115,26 +115,26 @@ if (isset($_SESSION['errors'])) {
         flex-shrink: 0;
     }
 
-    .item-info {
+    .prep-wrap .item-info {
         flex: 1;
         min-width: 0;
     }
 
-    .item-cod {
+    .prep-wrap .item-cod {
         font-size: .68rem;
         color: #888;
         font-weight: 600;
         letter-spacing: .04em;
     }
 
-    .item-desc {
+    .prep-wrap .item-desc {
         font-size: .92rem;
         font-weight: 700;
         color: #1a2e1a;
         line-height: 1.25;
     }
 
-    .item-obs {
+    .prep-wrap .item-obs {
         background: #fefce8;
         border: 1px solid #fde68a;
         border-radius: .3rem;
@@ -147,14 +147,14 @@ if (isset($_SESSION['errors'])) {
     }
 
     /* ── Comparador + input ── */
-    .item-row {
+    .prep-wrap .item-row {
         display: grid;
         grid-template-columns: 1fr 1fr 1fr auto;
         gap: .6rem;
         align-items: flex-end;
     }
 
-    .cmp-box {
+    .prep-wrap .cmp-box {
         background: #f5f7ff;
         border: 1px solid #dce4f8;
         border-radius: .35rem;
@@ -162,7 +162,7 @@ if (isset($_SESSION['errors'])) {
         text-align: center;
     }
 
-    .cmp-label {
+    .prep-wrap .cmp-label {
         font-size: .62rem;
         color: #888;
         font-weight: 600;
@@ -171,26 +171,18 @@ if (isset($_SESSION['errors'])) {
         margin-bottom: .1rem;
     }
 
-    .cmp-val {
+    .prep-wrap .cmp-val {
         font-size: .92rem;
         font-weight: 700;
         color: #222;
         font-family: monospace;
     }
 
-    .cmp-val.green {
-        color: #16a34a;
-    }
+    .prep-wrap .cmp-val.green { color: #16a34a; }
+    .prep-wrap .cmp-val.amber { color: #ca8a04; }
+    .prep-wrap .cmp-val.red   { color: #dc2626; }
 
-    .cmp-val.amber {
-        color: #ca8a04;
-    }
-
-    .cmp-val.red {
-        color: #dc2626;
-    }
-
-    .peso-group label {
+    .prep-wrap .peso-group label {
         display: block;
         font-size: .7rem;
         font-weight: 700;
@@ -200,7 +192,7 @@ if (isset($_SESSION['errors'])) {
         margin-bottom: .22rem;
     }
 
-    .peso-input {
+    .prep-wrap .peso-input {
         width: 100%;
         padding: .55rem .75rem;
         font-size: 1rem;
@@ -214,14 +206,14 @@ if (isset($_SESSION['errors'])) {
         transition: border-color .15s, box-shadow .15s;
     }
 
-    .peso-input:focus {
+    .prep-wrap .peso-input:focus {
         outline: none;
         border-color: #163fa0;
         box-shadow: 0 0 0 3px rgba(26, 77, 173, .18);
         background: #fff;
     }
 
-    .btn-sticker {
+    .prep-wrap .btn-sticker {
         display: flex;
         align-items: center;
         gap: .35rem;
@@ -239,17 +231,17 @@ if (isset($_SESSION['errors'])) {
         transition: background .15s, transform .1s;
     }
 
-    .btn-sticker:hover {
+    .prep-wrap .btn-sticker:hover {
         background: #d97706;
         transform: translateY(-1px);
     }
 
-    .btn-sticker:active {
+    .prep-wrap .btn-sticker:active {
         transform: translateY(0);
     }
 
     /* ── Footer form ── */
-    .prep-footer {
+    .prep-wrap .prep-footer {
         margin-top: 1rem;
         display: flex;
         align-items: center;
@@ -258,13 +250,13 @@ if (isset($_SESSION['errors'])) {
         gap: .5rem;
     }
 
-    .prep-footer-group {
+    .prep-wrap .prep-footer-group {
         display: flex;
         gap: .5rem;
         align-items: center;
     }
 
-    .btn-generar {
+    .prep-wrap .btn-generar {
         display: flex;
         align-items: center;
         gap: .5rem;
@@ -281,12 +273,12 @@ if (isset($_SESSION['errors'])) {
         transition: background .15s, transform .1s;
     }
 
-    .btn-generar:hover {
+    .prep-wrap .btn-generar:hover {
         background: #166534;
         transform: translateY(-1px);
     }
 
-    .btn-cierra-planilla {
+    .prep-wrap .btn-cierra-planilla {
         display: flex;
         align-items: center;
         gap: .5rem;
@@ -303,12 +295,12 @@ if (isset($_SESSION['errors'])) {
         transition: background .15s, transform .1s;
     }
 
-    .btn-cierra-planilla:hover {
+    .prep-wrap .btn-cierra-planilla:hover {
         background: #6d28d9;
         transform: translateY(-1px);
     }
 
-    .btn-volver {
+    .prep-wrap .btn-volver {
         display: flex;
         align-items: center;
         gap: .3rem;
@@ -323,7 +315,7 @@ if (isset($_SESSION['errors'])) {
         transition: background .15s;
     }
 
-    .btn-volver:hover {
+    .prep-wrap .btn-volver:hover {
         background: #d0d0d0;
     }
 
@@ -333,68 +325,68 @@ if (isset($_SESSION['errors'])) {
             max-width: 100%;
         }
 
-        .prep-body {
+        .prep-wrap .prep-body {
             padding: .85rem;
         }
 
-        .item-card {
+        .prep-wrap .item-card {
             padding: 1rem;
         }
 
-        .item-desc {
+        .prep-wrap .item-desc {
             font-size: 1rem;
         }
 
-        .cmp-val {
+        .prep-wrap .cmp-val {
             font-size: 1rem;
         }
 
-        .cmp-box {
+        .prep-wrap .cmp-box {
             padding: .55rem .6rem;
         }
 
-        .peso-input {
+        .prep-wrap .peso-input {
             min-height: 52px;
             font-size: 1.1rem;
             padding: .6rem .85rem;
         }
 
-        .btn-generar {
+        .prep-wrap .btn-generar {
             min-height: 52px;
             font-size: 1rem;
             padding: .75rem 1.8rem;
         }
 
-        .btn-volver {
+        .prep-wrap .btn-volver {
             min-height: 44px;
             font-size: .88rem;
             padding: .5rem 1.1rem;
         }
 
-        .btn-back {
+        .prep-wrap .btn-back {
             min-height: 36px;
         }
 
-        .btn-sticker {
+        .prep-wrap .btn-sticker {
             min-height: 52px;
             padding: .65rem 1.1rem;
         }
     }
 
     @media (max-width: 640px) {
-        .item-row {
+        .prep-wrap .item-row {
             grid-template-columns: 1fr 1fr;
         }
 
-        .item-row .peso-group {
+        .prep-wrap .item-row .peso-group {
             grid-column: 1 / -1;
         }
 
-        .item-row .btn-sticker {
+        .prep-wrap .item-row .btn-sticker {
             grid-column: 1 / -1;
         }
 
-        .prep-header-info {
+        .prep-wrap .prep-header-info {
             margin-left: 0;
         }
     }
