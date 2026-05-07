@@ -28,6 +28,8 @@ class StickerController
         $descripcion = trim($queryParams['desc'] ?? '');
         $pesoStr     = trim($queryParams['peso'] ?? '0');
         $peso        = (float)$pesoStr;
+        $loteId      = trim($queryParams['lote']  ?? '');   // lote de itemmov
+        $docPV       = trim($queryParams['docpv'] ?? '');   // pedido origen
         
         // Validar que el peso sea válido y mayor a 0
         $validacion = MessageFormatter::validateWeight($peso);
@@ -38,14 +40,18 @@ class StickerController
         $fechaHoy    = date('d/m/Y');
         $horaActual  = date('H:i');
         
-        // Datos para el QR: código|descripción|peso
+        // Datos para el QR: código|descripción|peso[|lote][|docpv]
         $qrData = "{$codart}|{$descripcion}|{$pesoStr}";
+        if ($loteId !== '') $qrData .= "|L:{$loteId}";
+        if ($docPV  !== '') $qrData .= "|PV:{$docPV}";
         
         // URL para generar el QR usando API pública (qr-server.com)
         $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' . urlencode($qrData);
         
         // Escapar datos
         $codartEsc   = htmlspecialchars($codart, ENT_QUOTES, 'UTF-8');
+        $loteEsc     = $loteId !== '' ? htmlspecialchars($loteId, ENT_QUOTES, 'UTF-8') : '';
+        $docPVEsc    = $docPV  !== '' ? htmlspecialchars(str_pad($docPV, 8, '0', STR_PAD_LEFT), ENT_QUOTES, 'UTF-8') : '';
         $descEsc     = htmlspecialchars($descripcion, ENT_QUOTES, 'UTF-8');
         $pesoEsc     = htmlspecialchars($pesoStr, ENT_QUOTES, 'UTF-8');
         $dirEsc      = htmlspecialchars(self::EMPRESA_DIRECCION, ENT_QUOTES, 'UTF-8');
@@ -218,6 +224,14 @@ class StickerController
             
             <!-- Descripción -->
             <div class="descripcion">$descEsc</div>
+            
+            <!-- Lote / Pedido Origen -->
+            <?php if ($loteEsc !== '' || $docPVEsc !== ''): ?>
+            <div style="font-size:7px;color:#444;margin:1.5mm 0;padding:1mm 2mm;background:#f9f9f9;border:1px solid #eee;">
+                <?php if ($docPVEsc !== ''): ?>PV: <strong><?= $docPVEsc ?></strong><?php endif; ?>
+                <?php if ($loteEsc !== ''): ?>&nbsp;Lote: <strong><?= $loteEsc ?></strong><?php endif; ?>
+            </div>
+            <?php endif; ?>
             
             <!-- Peso destacado -->
             <div class="peso-destacado">

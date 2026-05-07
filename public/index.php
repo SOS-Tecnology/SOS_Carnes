@@ -235,6 +235,11 @@ $app->group('', function ($group) {
         return $ctrl->index($request, $response);
     });
 
+    $group->get('/preparacion-pedido/integrar', function ($request, $response) {
+        $ctrl = new PreparacionPedidoController($GLOBALS['db']);
+        return $ctrl->integrar($request, $response);
+    });
+
     $group->get('/preparacion-pedido/{nrodoc}/preparar', function ($request, $response, $args) {
         $ctrl = new PreparacionPedidoController($GLOBALS['db']);
         return $ctrl->preparar($request, $response, $args);

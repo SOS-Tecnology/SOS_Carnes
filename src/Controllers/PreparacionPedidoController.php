@@ -8,6 +8,9 @@ class PreparacionPedidoController
 {
     public function __construct(private Medoo $db) {}
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // INDEX — lista de pedidos agrupados por cliente
+    // ─────────────────────────────────────────────────────────────────────────
     public function index($request, $response): mixed
     {
         if (!isset($_SESSION['user']['codtipocli'])) {
@@ -29,21 +32,21 @@ class PreparacionPedidoController
               AND  c.estado   in ('O')
               AND  TRIM(c.estadorm) = 'A'
               {$whereExtra}
-            ORDER  BY c.fechent ASC
+            ORDER  BY g.nombrecli ASC, c.fechent ASC
         ");
         $params = $codtipocli !== '' ? [':codtipocli' => $codtipocli] : [];
         $stmt->execute($params);
         $pedidos = $stmt->fetchAll(\PDO::FETCH_ASSOC);
 
-        // Para cada pedido, verificar si tiene una AP abierta (en proceso)
+        // Para cada pedido, verificar si tiene AP abierta
         foreach ($pedidos as &$p) {
             $apStmt = $this->db->pdo->prepare("
                 SELECT COUNT(*) as cnt
                 FROM   cabezamov c
-                WHERE  TRIM(c.tm)    = 'AP'
-                  AND  TRIM(c.tmaux) = 'PV'
+                WHERE  TRIM(c.tm)     = 'AP'
+                  AND  TRIM(c.tmaux)  = 'PV'
                   AND  TRIM(c.docaux) = :docaux
-                  AND  TRIM(c.prefaux) = :prefaux
+                  AND  TRIM(c.prefaux)= :prefaux
                   AND  c.estado IN ('', ' ')
             ");
             $apStmt->execute([':docaux' => $p['nrodoc'], ':prefaux' => $p['prefijo']]);
@@ -59,11 +62,56 @@ class PreparacionPedidoController
         );
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // INTEGRAR — recibe docs separados por coma y redirige a preparar integrado
+    // GET /preparacion-pedido/integrar?docs=X,Y&prefs=A,B
+    // ─────────────────────────────────────────────────────────────────────────
+    public function integrar($request, $response): mixed
+    {
+        $params = $request->getQueryParams();
+        $docsRaw  = trim($params['docs']  ?? '');
+        $prefsRaw = trim($params['prefs'] ?? '');
+
+        if ($docsRaw === '') {
+            return $response->withHeader('Location', '/preparacion-pedido')->withStatus(302);
+        }
+
+        $docs  = array_map('trim', explode(',', $docsRaw));
+        $prefs = array_map('trim', explode(',', $prefsRaw));
+
+        // El primer doc es el "pedido base" (ancla de la AP)
+        $docBase  = $docs[0];
+        $prefBase = $prefs[0] ?? '00';
+
+        $docsParam  = urlencode(implode(',', $docs));
+        $prefsParam = urlencode(implode(',', $prefs));
+
+        return $response->withHeader(
+            'Location',
+            '/preparacion-pedido/' . urlencode($docBase) . '/preparar'
+            . '?integrado=1&docs=' . $docsParam . '&prefs=' . $prefsParam
+        )->withStatus(302);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PREPARAR — muestra el formulario de pesajes
+    // ─────────────────────────────────────────────────────────────────────────
     public function preparar($request, $response, $args): mixed
     {
-        $nrodoc = trim($args['nrodoc']);
+        $nrodoc     = trim($args['nrodoc']);
+        $qp         = $request->getQueryParams();
+        $esIntegrado = !empty($qp['integrado']);
+        $docsRaw    = trim($qp['docs']  ?? $nrodoc);
+        $prefsRaw   = trim($qp['prefs'] ?? '');
 
-        // Consultar el PV primero para obtener prefijo y otros datos
+        $docs  = array_filter(array_map('trim', explode(',', $docsRaw)));
+        $prefs = array_filter(array_map('trim', explode(',', $prefsRaw)));
+
+        if (empty($docs)) {
+            $docs = [$nrodoc];
+        }
+
+        // ── Pedido base (primer doc) ──────────────────────────────────────
         $cabStmt = $this->db->pdo->prepare("
             SELECT TRIM(c.documento)                  AS nrodoc,
                    TRIM(c.prefijo)                    AS prefijo,
@@ -78,167 +126,192 @@ class PreparacionPedidoController
                    TRIM(c.estadorm)                   AS estadorm
             FROM   cabezamov c
             INNER  JOIN geclientes g ON c.codcp = g.codcli
-            WHERE  TRIM(c.tm)      = 'PV'
+            WHERE  TRIM(c.tm)       = 'PV'
               AND  TRIM(c.documento) = :doc
-              AND  c.estado        in ('O')
+              AND  c.estado         in ('O')
             LIMIT 1
         ");
-        $cabStmt->execute([':doc' => $nrodoc]);
+        $cabStmt->execute([':doc' => $docs[0]]);
         $pedidoBase = $cabStmt->fetch(\PDO::FETCH_ASSOC);
 
         if (!$pedidoBase) {
             return $response->withHeader('Location', '/preparacion-pedido')->withStatus(302);
         }
 
-        // Ahora con el prefijo conocido, buscar si hay AP abierta
+        // ── Verificar AP abierta del doc base ────────────────────────────
         $apAbiertaStmt = $this->db->pdo->prepare("
-            SELECT TRIM(c.documento) AS doc_ap,
-                   TRIM(c.prefijo)   AS pref_ap
+            SELECT TRIM(c.documento) AS doc_ap, TRIM(c.prefijo) AS pref_ap
             FROM   cabezamov c
-            WHERE  TRIM(c.tm)    = 'AP'
-              AND  TRIM(c.tmaux) = 'PV'
+            WHERE  TRIM(c.tm)     = 'AP'
+              AND  TRIM(c.tmaux)  = 'PV'
               AND  TRIM(c.docaux) = :docaux
-              AND  TRIM(c.prefaux) = :prefaux
+              AND  TRIM(c.prefaux)= :prefaux
               AND  c.estado IN ('', ' ')
             LIMIT 1
         ");
-        $apAbiertaStmt->execute([':docaux' => $nrodoc, ':prefaux' => $pedidoBase['prefijo']]);
+        $apAbiertaStmt->execute([':docaux' => $docs[0], ':prefaux' => $pedidoBase['prefijo']]);
         $apAbierta = $apAbiertaStmt->fetch(\PDO::FETCH_ASSOC);
 
-        // Si no hay AP abierta, filtrar por estadorm 'A'
         if (!$apAbierta && trim($pedidoBase['estadorm']) !== 'A') {
             return $response->withHeader('Location', '/preparacion-pedido')->withStatus(302);
         }
 
         $pedido = $pedidoBase;
 
-        // Verificar si existe una AP ya creada (preparación parcial)
+        // ── Pedidos integrados (todos los docs) ──────────────────────────
+        $pedidosIntegrados = [];
+        foreach ($docs as $i => $doc) {
+            $pref = $prefs[$i] ?? $pedidoBase['prefijo'];
+            $piStmt = $this->db->pdo->prepare("
+                SELECT TRIM(c.documento) AS nrodoc,
+                       TRIM(c.prefijo)   AS prefijo,
+                       DATE_FORMAT(c.fechent,'%d/%m/%Y') AS fecentrega_fmt
+                FROM   cabezamov c
+                WHERE  TRIM(c.tm)       = 'PV'
+                  AND  TRIM(c.documento) = :doc
+                  AND  c.estado         in ('O')
+                LIMIT 1
+            ");
+            $piStmt->execute([':doc' => $doc]);
+            $pi = $piStmt->fetch(\PDO::FETCH_ASSOC);
+            if ($pi) {
+                $pedidosIntegrados[] = $pi;
+            }
+        }
+
+        // ── Pesos AP existente ────────────────────────────────────────────
         $apExistenteStmt = $this->db->pdo->prepare("
-            SELECT TRIM(c.documento) AS doc_ap,
-                   TRIM(c.prefijo)   AS pref_ap
+            SELECT TRIM(c.documento) AS doc_ap, TRIM(c.prefijo) AS pref_ap
             FROM   cabezamov c
-            WHERE  TRIM(c.tm)    = 'AP'
-              AND  TRIM(c.tmaux) = 'PV'
+            WHERE  TRIM(c.tm)     = 'AP'
+              AND  TRIM(c.tmaux)  = 'PV'
               AND  TRIM(c.docaux) = :docaux
-              AND  TRIM(c.prefaux) = :prefaux
+              AND  TRIM(c.prefaux)= :prefaux
               AND  c.estado IN ('', ' ')
             ORDER  BY c.fecha DESC, c.hora DESC
             LIMIT 1
         ");
-        $apExistenteStmt->execute([':docaux' => $nrodoc, ':prefaux' => trim($pedido['prefijo'])]);
+        $apExistenteStmt->execute([':docaux' => $docs[0], ':prefaux' => trim($pedido['prefijo'])]);
         $apExistente = $apExistenteStmt->fetch(\PDO::FETCH_ASSOC);
 
-        // Debugging: Log AP document and prefix
-        if ($apExistente) {
-            error_log("AP Document: " . $apExistente['doc_ap']);
-            error_log("AP Prefix: " . $apExistente['pref_ap']);
-        } else {
-            error_log("No existing AP found.");
-        }
-
-        // Debugging: Log the result of the $pesosAP query
         $pesosAP = [];
-
-        // Validar si $apExistente tiene datos antes de acceder a sus índices
         if ($apExistente) {
-            $apDoc = $apExistente['doc_ap'] ?? null;
-            $apPref = $apExistente['pref_ap'] ?? null;
+            $pesosAPStmt = $this->db->pdo->prepare("
+                SELECT TRIM(cm.registro) AS registro, cm.cantidad AS peso
+                FROM   cuerpomov cm
+                WHERE  TRIM(cm.tm)        = 'AP'
+                  AND  TRIM(cm.prefijo)   = :prefijo
+                  AND  TRIM(cm.documento) = :documento
+                ORDER  BY cm.numreg
+            ");
+            $pesosAPStmt->execute([':prefijo' => $apExistente['pref_ap'], ':documento' => $apExistente['doc_ap']]);
+            foreach ($pesosAPStmt->fetchAll(\PDO::FETCH_ASSOC) as $p) {
+                $pesosAP[trim($p['registro'])] = (float)$p['peso'];
+            }
+        }
 
-            if ($apDoc && $apPref) {
-                $pesosAPStmt = $this->db->pdo->prepare("
-                    SELECT TRIM(cm.registro) AS registro,
-                           cm.cantidad      AS peso
-                    FROM   cuerpomov cm
-                    WHERE  TRIM(cm.tm)        = 'AP'
-                      AND  TRIM(cm.prefijo)   = :prefijo
-                      AND  TRIM(cm.documento) = :documento
-                    ORDER  BY cm.numreg
+        // ── Ítems: uno o varios pedidos ───────────────────────────────────
+        $items = [];
+        foreach ($docs as $i => $doc) {
+            $pref = $prefs[$i] ?? $pedidoBase['prefijo'];
+
+            // Buscar prefijo real si no fue pasado
+            if ($pref === '') {
+                $pfStmt = $this->db->pdo->prepare("
+                    SELECT TRIM(prefijo) AS prefijo FROM cabezamov
+                    WHERE TRIM(tm)='PV' AND TRIM(documento)=:doc LIMIT 1");
+                $pfStmt->execute([':doc' => $doc]);
+                $pfRow = $pfStmt->fetch(\PDO::FETCH_ASSOC);
+                $pref  = $pfRow['prefijo'] ?? '00';
+            }
+
+            $itemsStmt = $this->db->pdo->prepare("
+                SELECT TRIM(cm.registro) AS registro,
+                       TRIM(cm.codr)     AS codart,
+                       TRIM(cm.descr)    AS descripcion,
+                       TRIM(cm.comencpo) AS comencpo,
+                       cm.unidad,
+                       cm.cantidad,
+                       cm.cantent,
+                       TRIM(cm.documento) AS nrodoc_origen,
+                       TRIM(cm.prefijo)   AS prefijo_origen,
+                       COALESCE((
+                           SELECT SUM(i2.cantidad)
+                           FROM   itemmov i2
+                           WHERE  TRIM(i2.tm)        = 'PV'
+                             AND  TRIM(i2.prefijo)   = cm.prefijo
+                             AND  TRIM(i2.documento) = cm.documento
+                             AND  TRIM(i2.registro)  = cm.registro
+                       ), 0) AS total_alistado
+                FROM   cuerpomov cm
+                WHERE  TRIM(cm.tm)        = 'PV'
+                  AND  TRIM(cm.prefijo)   = :prefijo
+                  AND  TRIM(cm.documento) = :doc
+                ORDER  BY cm.registro
+            ");
+            $itemsStmt->execute([':prefijo' => $pref, ':doc' => $doc]);
+            $docItems = $itemsStmt->fetchAll(\PDO::FETCH_ASSOC);
+
+            // Cargar lotes de itemmov para cada ítem
+            foreach ($docItems as &$it) {
+                $lotesStmt = $this->db->pdo->prepare("
+                    SELECT TRIM(i.registro)  AS registro,
+                           TRIM(i.lote)   AS lote,
+                           i.cantidad
+                    FROM   itemmov i
+                    WHERE  TRIM(i.tm)        = 'PV'
+                      AND  TRIM(i.prefijo)   = :prefijo
+                      AND  TRIM(i.documento) = :doc
+                      AND  TRIM(i.registro)  = :reg
+                    ORDER  BY i.registro ASC
                 ");
-
-                $pesosAPStmt->execute([':prefijo' => $apPref, ':documento' => $apDoc]);
-                $pesosAPData = $pesosAPStmt->fetchAll(\PDO::FETCH_ASSOC);
-
-                if ($pesosAPData) {
-                    foreach ($pesosAPData as $p) {
-                        if (is_array($p) && isset($p['registro'], $p['peso'])) {
-                            $registroKey = trim($p['registro']);
-                            $pesosAP[$registroKey] = (float)$p['peso'];
-                        } else {
-                            error_log("Elemento inválido en pesosAP: " . print_r($p, true));
-                        }
-                    }
-                }
+                $lotesStmt->execute([
+                    ':prefijo' => $pref,
+                    ':doc'     => $doc,
+                    ':reg'     => trim($it['registro'])
+                ]);
+                $it['lotes'] = $lotesStmt->fetchAll(\PDO::FETCH_ASSOC);
             }
+            unset($it);
+
+            $items = array_merge($items, $docItems);
         }
-
-        // Debugging: Verificar contenido de $pesosAP
-        error_log("Contenido de pesosAP: " . print_r($pesosAP, true));
-
-        // Normalizar claves del arreglo $pesosAP
-        foreach ($pesosAP as $p) {
-            if (is_array($p) && isset($p['registro'], $p['peso'])) {
-                $registroKey = trim($p['registro']);
-                $pesosAP[$registroKey] = (float)$p['peso'];
-            } else {
-                error_log("Elemento inválido en pesosAP: " . print_r($p, true));
-            }
-        }
-
-        // Debugging: Verificar claves normalizadas
-        error_log("Claves normalizadas en pesosAP: " . print_r(array_keys($pesosAP), true));
-
-        $itemsStmt = $this->db->pdo->prepare("
-            SELECT TRIM(cm.registro)  AS registro,
-                   TRIM(cm.codr)      AS codart,
-                   TRIM(cm.descr)     AS descripcion,
-                   TRIM(cm.comencpo)  AS comencpo,
-                   cm.unidad,
-                   cm.cantidad,
-                   cm.cantent,
-                   COALESCE((
-                       SELECT SUM(i.cantidad)
-                       FROM   itemmov i
-                       WHERE  TRIM(i.tm)        = 'PV'
-                         AND  TRIM(i.prefijo)   = cm.prefijo
-                         AND  TRIM(i.documento) = cm.documento
-                         AND  TRIM(i.registro)  = cm.registro
-                   ), 0) AS total_alistado
-            FROM   cuerpomov cm
-            WHERE  TRIM(cm.tm)        = 'PV'
-              AND  TRIM(cm.prefijo)   = :prefijo
-              AND  TRIM(cm.documento) = :doc
-            ORDER  BY cm.registro
-        ");
-        $itemsStmt->execute([':prefijo' => $pedido['prefijo'], ':doc' => $nrodoc]);
-        $items = $itemsStmt->fetchAll(\PDO::FETCH_ASSOC);
 
         return renderView(
             $response,
             __DIR__ . '/../Views/preparacion-pedido/preparar.php',
             'Preparar Pedido',
             [
-                'pedido'      => $pedido,
-                'items'       => $items,
-                'pesosAP'     => $pesosAP,
-                'apExistente' => $apExistente
+                'pedido'            => $pedido,
+                'pedidosIntegrados' => $pedidosIntegrados,
+                'items'             => $items,
+                'pesosAP'           => $pesosAP,
+                'apExistente'       => $apExistente,
             ]
         );
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // GUARDAR — procesa el formulario y genera/actualiza AP
+    // ─────────────────────────────────────────────────────────────────────────
     public function guardar($request, $response, $args): mixed
     {
-        $nrodoc    = trim($args['nrodoc']);
-        $body      = $request->getParsedBody();
-        $accion    = $body['accion'] ?? '';  // Acción: 'cerrar' o vacío (guardar pesos)
+        $nrodoc  = trim($args['nrodoc']);
+        $body    = $request->getParsedBody();
+        $accion  = $body['accion'] ?? '';
 
-        // Si la acción es "cerrar", delegar al método cerrar
         if ($accion === 'cerrar') {
             return $this->cerrar($request, $response, $args);
         }
 
-        $registros = $body['registros'] ?? [];
-        $pesos     = $body['pesos']     ?? [];
+        $registros       = $body['registros']       ?? [];
+        $pesos           = $body['pesos']            ?? [];
+        $nrodocOrigenes  = $body['nrodoc_origen']    ?? [];
+        $docsIntegrados  = $body['docs_integrados']  ?? [];
+        $prefsIntegrados = $body['prefs_integrados'] ?? [];
+        $esIntegrado     = !empty($body['integrado']);
 
+        // ── Pedido base ───────────────────────────────────────────────────
         $cabStmt = $this->db->pdo->prepare("
             SELECT TRIM(c.documento) AS nrodoc,
                    TRIM(c.prefijo)   AS prefijo,
@@ -248,8 +321,7 @@ class PreparacionPedidoController
             FROM   cabezamov c
             WHERE  TRIM(c.tm)       = 'PV'
               AND  TRIM(c.documento) = :doc
-              AND  c.estado         = 'O'
-              AND  TRIM(c.estadorm) = 'A'
+              AND  c.estado          = 'O'
             LIMIT 1
         ");
         $cabStmt->execute([':doc' => $nrodoc]);
@@ -259,30 +331,39 @@ class PreparacionPedidoController
             return $response->withHeader('Location', '/preparacion-pedido')->withStatus(302);
         }
 
-        $itemsStmt = $this->db->pdo->prepare("
-            SELECT TRIM(cm.registro)  AS registro,
-                   TRIM(cm.codr)      AS codart,
-                   TRIM(cm.descr)     AS descripcion,
-                   TRIM(cm.comencpo)  AS comencpo,
-                   cm.unidad,
-                   cm.valor,
-                   TRIM(cm.bodega)    AS bodega,
-                   cm.piva,
-                   cm.descto
-            FROM   cuerpomov cm
-            WHERE  TRIM(cm.tm)        = 'PV'
-              AND  TRIM(cm.prefijo)   = :prefijo
-              AND  TRIM(cm.documento) = :doc
-            ORDER  BY cm.registro
-        ");
-        $itemsStmt->execute([':prefijo' => $pedido['prefijo'], ':doc' => $nrodoc]);
-        $items = $itemsStmt->fetchAll(\PDO::FETCH_ASSOC);
+        // ── Reconstruir ítems desde todos los docs implicados ─────────────
+        $allDocs  = $esIntegrado && !empty($docsIntegrados) ? $docsIntegrados  : [$nrodoc];
+        $allPrefs = $esIntegrado && !empty($prefsIntegrados) ? $prefsIntegrados : [$pedido['prefijo']];
 
-        // Calcular totales AP
-        $lineItems   = [];
-        $totalVriva  = 0.0;
-        $totalValor  = 0.0;
-        foreach ($items as $idx => $it) {
+        $allItems = [];
+        foreach ($allDocs as $i => $doc) {
+            $pref = $allPrefs[$i] ?? $pedido['prefijo'];
+            $iStmt = $this->db->pdo->prepare("
+                SELECT TRIM(cm.registro) AS registro,
+                       TRIM(cm.codr)     AS codart,
+                       TRIM(cm.descr)    AS descripcion,
+                       TRIM(cm.comencpo) AS comencpo,
+                       cm.unidad, cm.valor, TRIM(cm.bodega) AS bodega,
+                       cm.piva, cm.descto,
+                       TRIM(cm.documento) AS nrodoc_origen
+                FROM   cuerpomov cm
+                WHERE  TRIM(cm.tm)        = 'PV'
+                  AND  TRIM(cm.prefijo)   = :prefijo
+                  AND  TRIM(cm.documento) = :doc
+                ORDER  BY cm.registro
+            ");
+            $iStmt->execute([':prefijo' => $pref, ':doc' => $doc]);
+            foreach ($iStmt->fetchAll(\PDO::FETCH_ASSOC) as $it) {
+                $allItems[] = $it;
+            }
+        }
+
+        // ── Armar lineItems con los pesos enviados ────────────────────────
+        $lineItems  = [];
+        $totalVriva = 0.0;
+        $totalValor = 0.0;
+
+        foreach ($allItems as $idx => $it) {
             $pesoVal = (float)($pesos[$idx] ?? 0);
             $valor   = (float)$it['valor'];
             $piva    = (float)$it['piva'];
@@ -292,30 +373,30 @@ class PreparacionPedidoController
             $totalValor += $pesoVal * $valor * (1 + $piva / 100) * (1 - $descto / 100);
 
             $lineItems[] = [
-                'numreg'   => $idx + 1,
-                'registro' => trim($it['registro']),
-                'codr'     => $it['codart'],
-                'descr'    => $it['descripcion'],
-                'comencpo' => $it['comencpo'],
-                'unidad'   => $it['unidad'],
-                'cantidad' => $pesoVal,
-                'valor'    => $valor,
-                'bodega'   => $it['bodega'],
-                'piva'     => $piva,
-                'descto'   => $descto,
+                'numreg'       => $idx + 1,
+                'registro'     => trim($it['registro']),
+                'codr'         => $it['codart'],
+                'descr'        => $it['descripcion'],
+                'comencpo'     => $it['comencpo'],
+                'unidad'       => $it['unidad'],
+                'cantidad'     => $pesoVal,
+                'valor'        => $valor,
+                'bodega'       => $it['bodega'],
+                'piva'         => $piva,
+                'descto'       => $descto,
+                'docaux'       => $it['nrodoc_origen'] ?? $nrodoc,
+                'prefaux'      => $pedido['prefijo'],
             ];
         }
 
-        // Verificar si existe una AP sin cerrar para este PV
+        // ── AP existente (solo sobre el doc base) ─────────────────────────
         $apExistenteStmt = $this->db->pdo->prepare("
-            SELECT TRIM(c.documento) AS doc_ap,
-                   TRIM(c.prefijo)   AS pref_ap,
-                   TRIM(c.prefaux)   AS pref_pv
+            SELECT TRIM(c.documento) AS doc_ap, TRIM(c.prefijo) AS pref_ap
             FROM   cabezamov c
-            WHERE  TRIM(c.tm)    = 'AP'
-              AND  TRIM(c.tmaux) = 'PV'
+            WHERE  TRIM(c.tm)     = 'AP'
+              AND  TRIM(c.tmaux)  = 'PV'
               AND  TRIM(c.docaux) = :docaux
-              AND  TRIM(c.prefaux) = :prefaux
+              AND  TRIM(c.prefaux)= :prefaux
               AND  c.estado IN ('', ' ')
             ORDER  BY c.fecha DESC, c.hora DESC
             LIMIT 1
@@ -327,32 +408,27 @@ class PreparacionPedidoController
         $hoy  = date('Y-m-d');
         $hora = date('H:i:s');
         $pdo->beginTransaction();
+
         try {
             if ($apExistente) {
-                // Actualizar AP existente
-                $docAP = $apExistente['doc_ap'];
+                // ── Actualizar AP existente ───────────────────────────────
+                $docAP  = $apExistente['doc_ap'];
                 $prefAP = $apExistente['pref_ap'];
 
-                // Eliminar items existentes de la AP
                 $pdo->prepare("
                     DELETE FROM cuerpomov
-                    WHERE TRIM(tm)        = 'AP'
-                      AND TRIM(prefijo)   = :pref
-                      AND TRIM(documento) = :doc
+                    WHERE TRIM(tm)='AP' AND TRIM(prefijo)=:pref AND TRIM(documento)=:doc
                 ")->execute([':pref' => $prefAP, ':doc' => $docAP]);
 
-                // Insertar nuevos items
                 $insItem = $pdo->prepare("
                     INSERT INTO cuerpomov
                         (tm, prefijo, documento, numreg, registro,
                          codr, descr, comencpo, unidad, cantidad, cantent,
-                         valor, bodega, piva, descto,
-                         docaux, tmaux, prefaux)
+                         valor, bodega, piva, descto, docaux, tmaux, prefaux)
                     VALUES
                         ('AP', :pref, :doc, :numreg, :registro,
                          :codr, :descr, :comencpo, :unidad, :cantidad, 0,
-                         :valor, :bodega, :piva, :descto,
-                         :docaux, 'PV', :prefaux)
+                         :valor, :bodega, :piva, :descto, :docaux, 'PV', :prefaux)
                 ");
                 foreach ($lineItems as $li) {
                     $insItem->execute([
@@ -369,19 +445,15 @@ class PreparacionPedidoController
                         ':bodega'   => $li['bodega'],
                         ':piva'     => $li['piva'],
                         ':descto'   => $li['descto'],
-                        ':docaux'   => $pedido['nrodoc'],
-                        ':prefaux'  => $pedido['prefijo'],
+                        ':docaux'   => $li['docaux'],
+                        ':prefaux'  => $li['prefaux'],
                     ]);
                 }
 
-                // Actualizar totales en cabezamov
                 $pdo->prepare("
                     UPDATE cabezamov
-                    SET    vriva = :vriva, valortotal = :valortotal,
-                           fecha = :fecha, hora = :hora
-                    WHERE  TRIM(tm)       = 'AP'
-                      AND  TRIM(documento) = :doc
-                      AND  TRIM(prefijo)   = :pref
+                    SET vriva=:vriva, valortotal=:valortotal, fecha=:fecha, hora=:hora
+                    WHERE TRIM(tm)='AP' AND TRIM(documento)=:doc AND TRIM(prefijo)=:pref
                 ")->execute([
                     ':vriva'      => round($totalVriva, 3),
                     ':valortotal' => round($totalValor, 3),
@@ -390,12 +462,10 @@ class PreparacionPedidoController
                     ':doc'        => $docAP,
                     ':pref'       => $prefAP,
                 ]);
+
             } else {
-                // Crear nueva AP
-                // Next AP document number
-                $conStmt = $pdo->prepare(
-                    "SELECT ultmov FROM inconsemov WHERE TRIM(tipomv) = 'AP' LIMIT 1"
-                );
+                // ── Crear nueva AP ────────────────────────────────────────
+                $conStmt = $pdo->prepare("SELECT ultmov FROM inconsemov WHERE TRIM(tipomv)='AP' LIMIT 1");
                 $conStmt->execute();
                 $conRow = $conStmt->fetch(\PDO::FETCH_ASSOC);
 
@@ -403,10 +473,9 @@ class PreparacionPedidoController
                     $lastNum   = (int)$conRow['ultmov'];
                     $newDocNum = str_pad($lastNum + 1, 8, '0', STR_PAD_LEFT);
                 } else {
-                    $maxStmt = $pdo->prepare(
-                        "SELECT COALESCE(MAX(CAST(TRIM(documento) AS UNSIGNED)), 0)
-                         FROM cabezamov WHERE TRIM(tm) = 'AP'"
-                    );
+                    $maxStmt = $pdo->prepare("
+                        SELECT COALESCE(MAX(CAST(TRIM(documento) AS UNSIGNED)),0)
+                        FROM cabezamov WHERE TRIM(tm)='AP'");
                     $maxStmt->execute();
                     $lastNum   = (int)$maxStmt->fetchColumn();
                     $newDocNum = str_pad($lastNum + 1, 8, '0', STR_PAD_LEFT);
@@ -417,13 +486,12 @@ class PreparacionPedidoController
                     INSERT INTO cabezamov
                         (tm, prefijo, documento, codcp, codsuc,
                          fecha, hora, fechent, estado, estadorm,
-                         vriva, valortotal,
-                         docaux, tmaux, prefaux)
+                         vriva, valortotal, docaux, tmaux, prefaux)
                     VALUES
-                        ('AP', '00', :doc, :codcp, :codsuc,
-                         :fecha, :hora, :fechent, ' ', '',
-                         :vriva, :valortotal,
-                         :docaux, 'PV', :prefaux)
+                        ('AP','00',:doc,:codcp,:codsuc,
+                         :fecha,:hora,:fechent,' ','',
+                         :vriva,:valortotal,
+                         :docaux,'PV',:prefaux)
                 ")->execute([
                     ':doc'        => $newDocNum,
                     ':codcp'      => $pedido['codcp'],
@@ -441,15 +509,12 @@ class PreparacionPedidoController
                     INSERT INTO cuerpomov
                         (tm, prefijo, documento, numreg, registro,
                          codr, descr, comencpo, unidad, cantidad, cantent,
-                         valor, bodega, piva, descto,
-                         docaux, tmaux, prefaux)
+                         valor, bodega, piva, descto, docaux, tmaux, prefaux)
                     VALUES
-                        ('AP', '00', :doc, :numreg, :registro,
-                         :codr, :descr, :comencpo, :unidad, :cantidad, 0,
-                         :valor, :bodega, :piva, :descto,
-                         :docaux, 'PV', :prefaux)
+                        ('AP','00',:doc,:numreg,:registro,
+                         :codr,:descr,:comencpo,:unidad,:cantidad, 0,
+                         :valor,:bodega,:piva,:descto,:docaux,'PV',:prefaux)
                 ");
-
                 foreach ($lineItems as $li) {
                     $insItem->execute([
                         ':doc'      => $newDocNum,
@@ -464,45 +529,44 @@ class PreparacionPedidoController
                         ':bodega'   => $li['bodega'],
                         ':piva'     => $li['piva'],
                         ':descto'   => $li['descto'],
-                        ':docaux'   => $pedido['nrodoc'],
-                        ':prefaux'  => $pedido['prefijo'],
+                        ':docaux'   => $li['docaux'],
+                        ':prefaux'  => $li['prefaux'],
                     ]);
                 }
 
                 if ($conRow) {
-                    $pdo->prepare(
-                        "UPDATE inconsemov SET ultmov = :num WHERE TRIM(tipomv) = 'AP'"
-                    )->execute([':num' => $lastNum + 1]);
+                    $pdo->prepare("UPDATE inconsemov SET ultmov=:num WHERE TRIM(tipomv)='AP'")
+                        ->execute([':num' => $lastNum + 1]);
                 }
             }
 
-            // NO cambiar estadorm aquí - mantener en 'A' para que siga en la lista
-            // Solo se cambia a 'C' cuando se hace "Cierra Planilla"
-
             $pdo->commit();
+
         } catch (\Exception $e) {
             $pdo->rollBack();
+            error_log('PreparacionPedidoController::guardar error: ' . $e->getMessage());
             return $response->withHeader(
                 'Location',
                 '/preparacion-pedido/' . urlencode($nrodoc) . '/preparar'
             )->withStatus(302);
         }
 
-        // Después de guardar exitosamente, mostrar modal de cierre
         return $response->withHeader(
             'Location',
             '/preparacion-pedido/' . urlencode($nrodoc) . '/preparar?modalCierre=1'
         )->withStatus(302);
     }
 
-    /**
-     * Cierra la planilla (AP) cambiando su estado de ' ' (blanco) a 'C' (cerrado)
-     */
+    // ─────────────────────────────────────────────────────────────────────────
+    // CERRAR — cambia AP a 'C' y PV(s) a estadorm='R'
+    // ─────────────────────────────────────────────────────────────────────────
     public function cerrar($request, $response, $args): mixed
     {
         $nrodoc  = trim($args['nrodoc']);
         $body    = $request->getParsedBody();
         $prefijo = trim($body['prefijo'] ?? '');
+        $docsIntegrados  = $body['docs_integrados']  ?? [];
+        $prefsIntegrados = $body['prefs_integrados'] ?? [];
 
         if ($prefijo === '') {
             $_SESSION['errors'] = ['Falta el prefijo del pedido.'];
@@ -510,14 +574,11 @@ class PreparacionPedidoController
         }
 
         try {
-            // Verificar que la PV exista
+            // Verificar PV base
             $pvStmt = $this->db->pdo->prepare("
-                SELECT TRIM(c.documento) AS nrodoc,
-                       TRIM(c.prefijo)   AS prefijo
+                SELECT TRIM(c.documento) AS nrodoc, TRIM(c.prefijo) AS prefijo
                 FROM   cabezamov c
-                WHERE  TRIM(c.tm)       = 'PV'
-                  AND  TRIM(c.prefijo) = :pref
-                  AND  TRIM(c.documento) = :doc
+                WHERE  TRIM(c.tm)='PV' AND TRIM(c.prefijo)=:pref AND TRIM(c.documento)=:doc
                 LIMIT 1
             ");
             $pvStmt->execute([':doc' => $nrodoc, ':pref' => $prefijo]);
@@ -527,16 +588,13 @@ class PreparacionPedidoController
                 return $response->withHeader('Location', '/preparacion-pedido')->withStatus(302);
             }
 
-            // Buscar la AP más reciente (cerrada o sin cerrar)
+            // AP más reciente sin cerrar
             $apStmt = $this->db->pdo->prepare("
-                SELECT TRIM(c.documento) AS doc_ap,
-                       TRIM(c.prefijo)   AS pref_ap
+                SELECT TRIM(c.documento) AS doc_ap, TRIM(c.prefijo) AS pref_ap
                 FROM   cabezamov c
-                WHERE  TRIM(c.tm)    = 'AP'
-                  AND  TRIM(c.tmaux) = 'PV'
-                  AND  TRIM(c.docaux) = :docaux
-                  AND  TRIM(c.prefaux) = :prefaux
-                  AND  c.estado IN ('', ' ')
+                WHERE  TRIM(c.tm)='AP' AND TRIM(c.tmaux)='PV'
+                  AND  TRIM(c.docaux)=:docaux AND TRIM(c.prefaux)=:prefaux
+                  AND  c.estado IN ('',' ')
                 ORDER  BY c.fecha DESC, c.hora DESC
                 LIMIT 1
             ");
@@ -544,29 +602,29 @@ class PreparacionPedidoController
             $ap = $apStmt->fetch(\PDO::FETCH_ASSOC);
 
             if (!$ap) {
-                // No hay AP sin cerrar
                 return $response->withHeader('Location', '/preparacion-pedido')->withStatus(302);
             }
 
-            // Cambiar estado de la AP a 'C' (cerrada)
+            // Cerrar AP
             $this->db->pdo->prepare("
-                UPDATE cabezamov
-                SET    estado = 'C'
-                WHERE  TRIM(tm)       = 'AP'
-                  AND  TRIM(documento) = :doc
-                  AND  TRIM(prefijo)   = :pref
+                UPDATE cabezamov SET estado='C'
+                WHERE TRIM(tm)='AP' AND TRIM(documento)=:doc AND TRIM(prefijo)=:pref
             ")->execute([':doc' => $ap['doc_ap'], ':pref' => $ap['pref_ap']]);
 
-            // Cambiar estadorm del PV a 'R' para marcar como completado
-            $this->db->pdo->prepare("
-                UPDATE cabezamov
-                SET    estadorm = 'R'
-                WHERE  TRIM(tm)       = 'PV'
-                  AND  TRIM(documento) = :doc
-                  AND  TRIM(prefijo)   = :pref
-            ")->execute([':doc' => $nrodoc, ':pref' => $prefijo]);
+            // Marcar todos los PV implicados como 'R'
+            $allDocs  = !empty($docsIntegrados)  ? $docsIntegrados  : [$nrodoc];
+            $allPrefs = !empty($prefsIntegrados) ? $prefsIntegrados : [$prefijo];
+
+            foreach ($allDocs as $i => $doc) {
+                $pref = $allPrefs[$i] ?? $prefijo;
+                $this->db->pdo->prepare("
+                    UPDATE cabezamov SET estadorm='R'
+                    WHERE TRIM(tm)='PV' AND TRIM(documento)=:doc AND TRIM(prefijo)=:pref
+                ")->execute([':doc' => $doc, ':pref' => $pref]);
+            }
 
             $_SESSION['success'] = "Planilla cerrada correctamente.";
+
         } catch (\Exception $e) {
             $_SESSION['errors'] = ["Error al cerrar la planilla: " . $e->getMessage()];
         }

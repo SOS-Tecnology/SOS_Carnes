@@ -69,30 +69,35 @@
             main.flex-1 { padding: 0.65rem !important; }
         }
         
-        /* ── Ocultar sidebar en pantallas pequeñas (≤768px) ──── */
+        /* ── Móvil (≤768px): sidebar oculto por defecto, overlay al abrir ── */
         @media (max-width: 768px) {
-            #sidebar { display: none !important; }
-            #sidebarToggle { display: none !important; }
-        }
-        
-        /* ── Botón flotante para mostrar menú en móvil ──── */
-        #mobileMenuBtn {
-            display: none;
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            width: 56px;
-            height: 56px;
-            border-radius: 50%;
-            background: #1a4dad;
-            color: white;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            z-index: 9999;
-            align-items: center;
-            justify-content: center;
-        }
-        @media (max-width: 768px) {
-            #mobileMenuBtn { display: flex; }
+            /* El sidebar se posiciona encima del contenido */
+            #sidebar {
+                position: fixed;
+                top: 56px;          /* justo bajo el header */
+                left: 0;
+                height: calc(100vh - 56px);
+                z-index: 8000;
+                width: 240px !important;   /* siempre ancho completo en móvil */
+                transform: translateX(-100%);
+                transition: transform 0.26s ease;
+                display: block !important; /* nunca display:none */
+                box-shadow: 4px 0 16px rgba(0,0,0,0.35);
+            }
+            #sidebar.mobile-open {
+                transform: translateX(0);
+            }
+            /* Overlay oscuro detrás del menú */
+            #mobileOverlay {
+                display: none;
+                position: fixed;
+                inset: 56px 0 0 0;
+                background: rgba(0,0,0,0.45);
+                z-index: 7999;
+            }
+            #mobileOverlay.visible { display: block; }
+            /* El toggle del header sigue visible en móvil */
+            #sidebarToggle { display: flex !important; }
         }
     </style>
 </head>
@@ -228,7 +233,7 @@
         </aside>
 
         <!-- ── ÁREA DE TRABAJO ──────────────────────────────────── -->
-        <main class="flex-1 overflow-auto p-6 pb-20">
+        <main class="flex-1 overflow-auto p-6 pb-20" onclick="if(typeof closeMobileMenu==='function' && document.getElementById('mobileOverlay') && document.getElementById('mobileOverlay').classList.contains('visible')) closeMobileMenu()">
             <?= $content ?>
         </main>
 
@@ -246,8 +251,15 @@
             sidebar.classList.add('collapsed');
         }
         document.getElementById('sidebarToggle').addEventListener('click', function () {
-            sidebar.classList.toggle('collapsed');
-            localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed') ? '1' : '0');
+            if (isMobile()) {
+                // En móvil: toggle del overlay
+                const isOpen = sidebar.classList.toggle('mobile-open');
+                overlay.classList.toggle('visible', isOpen);
+            } else {
+                // En desktop/tablet: colapsar sidebar
+                sidebar.classList.toggle('collapsed');
+                localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed') ? '1' : '0');
+            }
         });
 
         function toggleUserMenu() {
@@ -260,18 +272,18 @@
             }
         });
         
-        // ── Botón flotante para mostrar menú en móvil ──
-        const mobileBtn = document.createElement('button');
-        mobileBtn.id = 'mobileMenuBtn';
-        mobileBtn.innerHTML = '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>';
-        mobileBtn.title = 'Menú';
-        mobileBtn.onclick = function() {
-            const sidebar = document.getElementById('sidebar');
-            if (sidebar) {
-                sidebar.style.display = sidebar.style.display === 'none' ? '' : 'none';
-            }
-        };
-        document.body.appendChild(mobileBtn);
+        // ── Overlay móvil ──────────────────────────────────────────
+        const overlay = document.createElement('div');
+        overlay.id = 'mobileOverlay';
+        overlay.onclick = closeMobileMenu;
+        document.body.appendChild(overlay);
+
+        function isMobile() { return window.innerWidth <= 768; }
+
+        function closeMobileMenu() {
+            sidebar.classList.remove('mobile-open');
+            overlay.classList.remove('visible');
+        }
     </script>
 
 </body>
