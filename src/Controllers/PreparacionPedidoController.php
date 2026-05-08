@@ -551,9 +551,16 @@ class PreparacionPedidoController
             )->withStatus(302);
         }
 
+        $extraParams = '';
+        if ($esIntegrado && !empty($docsIntegrados)) {
+            $extraParams = '&integrado=1'
+                . '&docs='  . urlencode(implode(',', $allDocs))
+                . '&prefs=' . urlencode(implode(',', $allPrefs));
+        }
+
         return $response->withHeader(
             'Location',
-            '/preparacion-pedido/' . urlencode($nrodoc) . '/preparar?modalCierre=1'
+            '/preparacion-pedido/' . urlencode($nrodoc) . '/preparar?modalCierre=1' . $extraParams
         )->withStatus(302);
     }
 
