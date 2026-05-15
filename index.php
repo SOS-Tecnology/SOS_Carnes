@@ -9,8 +9,8 @@ session_set_cookie_params([
 ]);
 session_start();
 
-require __DIR__ . '/../vendor/autoload.php';
-require_once __DIR__ . '/../src/config.php';
+require __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/src/config.php';
 
 use Slim\Factory\AppFactory;
 use Medoo\Medoo;
@@ -21,7 +21,7 @@ use App\Controllers\PreparacionPedidoController;
 use App\Controllers\StickerController;
 
 // ── Entorno ───────────────────────────────────────────────
-$dotenv = Dotenv::createImmutable(__DIR__ . '/..');
+$dotenv = Dotenv::createImmutable(__DIR__);
 $dotenv->load();
 
 // ── Base de datos ─────────────────────────────────────────
@@ -48,7 +48,7 @@ function renderView($response, $viewPath, $title, $data = [])
     ob_start();
     include $viewPath;
     $content = ob_get_clean();
-    include __DIR__ . '/../src/Views/layouts/dashboard.php';
+    include __DIR__ . '/src/Views/layouts/dashboard.php';
     return $response;
 }
 
@@ -64,7 +64,7 @@ $app->get('/', function ($request, $response) {
 // ── Login ─────────────────────────────────────────────────
 $app->get('/login', function ($request, $response) {
     ob_start();
-    include __DIR__ . '/../src/Views/Auth/login.php';
+    include __DIR__ . '/src/Views/Auth/login.php';
     $response->getBody()->write(ob_get_clean());
     return $response;
 });
@@ -107,7 +107,7 @@ $app->get('/logout', function ($request, $response) {
 // ── Recuperación de contraseña ────────────────────────────
 $app->get('/forgot-password', function ($request, $response) {
     ob_start();
-    include __DIR__ . '/../src/Views/Auth/forgot-password.php';
+    include __DIR__ . '/src/Views/Auth/forgot-password.php';
     $response->getBody()->write(ob_get_clean());
     return $response;
 });
@@ -157,7 +157,7 @@ $app->get('/reset-password/{token}', function ($request, $response, $args) {
     }
 
     ob_start();
-    include __DIR__ . '/../src/Views/Auth/reset-password.php';
+    include __DIR__ . '/src/Views/Auth/reset-password.php';
     $response->getBody()->write(ob_get_clean());
     return $response;
 });
@@ -195,7 +195,7 @@ $app->group('', function ($group) {
 
     // ── Dashboard ─────────────────────────────────────────
     $group->get('/dashboard_home', function ($request, $response) {
-        return renderView($response, __DIR__ . '/../src/Views/dashboard_home.php', 'Inicio', []);
+        return renderView($response, __DIR__ . '/src/Views/dashboard_home.php', 'Inicio', []);
     });
 
     // ── Planilla de Pedidos ───────────────────────────────
@@ -269,13 +269,13 @@ $app->group('', function ($group) {
     // ── Usuarios ──────────────────────────────────────────
     $group->get('/usuarios', function ($request, $response) {
         $usuarios = $GLOBALS['db']->select("users", "*");
-        return renderView($response, __DIR__ . '/../src/Views/Usuarios/index.php', "Usuarios", [
+        return renderView($response, __DIR__ . '/src/Views/Usuarios/index.php', "Usuarios", [
             'usuarios' => $usuarios
         ]);
     });
 
     $group->get('/usuarios/create', function ($request, $response) {
-        return renderView($response, __DIR__ . '/../src/Views/Usuarios/create.php', "Nuevo Usuario", []);
+        return renderView($response, __DIR__ . '/src/Views/Usuarios/create.php', "Nuevo Usuario", []);
     });
 
     $group->post('/usuarios/store', function ($request, $response) {
@@ -303,7 +303,7 @@ $app->group('', function ($group) {
         if (!$usuario) {
             return $response->withHeader('Location', '/usuarios')->withStatus(302);
         }
-        return renderView($response, __DIR__ . '/../src/Views/Usuarios/edit.php', "Editar Usuario", [
+        return renderView($response, __DIR__ . '/src/Views/Usuarios/edit.php', "Editar Usuario", [
             'usuario' => $usuario
         ]);
     });
