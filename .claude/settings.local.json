@@ -3,7 +3,11 @@
     "allow": [
       "Bash(php -r ' *)",
       "Bash(php -l public/index.php)",
-      "Bash(php -l src/Controllers/PlanillaPedidosController.php)"
+      "Bash(php -l src/Controllers/PlanillaPedidosController.php)",
+      "Bash(mkdir -p \"d:\\\\Desarrollo_web\\\\DyDdotaciones\\\\SOS_Nomina\\\\public\\\\css\" \"d:\\\\Desarrollo_web\\\\DyDdotaciones\\\\SOS_Nomina\\\\src\\\\Controllers\" \"d:\\\\Desarrollo_web\\\\DyDdotaciones\\\\SOS_Nomina\\\\src\\\\Middleware\" \"d:\\\\Desarrollo_web\\\\DyDdotaciones\\\\SOS_Nomina\\\\src\\\\Views\\\\layouts\" \"d:\\\\Desarrollo_web\\\\DyDdotaciones\\\\SOS_Nomina\\\\src\\\\Views\\\\Auth\" \"d:\\\\Desarrollo_web\\\\DyDdotaciones\\\\SOS_Nomina\\\\src\\\\Views\\\\Usuarios\" \"d:\\\\Desarrollo_web\\\\DyDdotaciones\\\\SOS_Nomina\\\\src\\\\Views\\\\Perfiles\" \"d:\\\\Desarrollo_web\\\\DyDdotaciones\\\\SOS_Nomina\\\\src\\\\Views\\\\Archivos\" \"d:\\\\Desarrollo_web\\\\DyDdotaciones\\\\SOS_Nomina\\\\src\\\\Views\\\\Empleados\" \"d:\\\\Desarrollo_web\\\\DyDdotaciones\\\\SOS_Nomina\\\\src\\\\Views\\\\Novedades\" \"d:\\\\Desarrollo_web\\\\DyDdotaciones\\\\SOS_Nomina\\\\src\\\\Views\\\\Informes\" \"d:\\\\Desarrollo_web\\\\DyDdotaciones\\\\SOS_Nomina\\\\src\\\\Views\\\\NominaElectronica\")"
+    ],
+    "additionalDirectories": [
+      "d:\\Desarrollo_web\\DyDdotaciones\\SOS_Nomina\\public"
     ]
   }
 }
