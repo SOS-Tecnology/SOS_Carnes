@@ -130,6 +130,51 @@ $comencpo = implode("\n", $lines);
     }
     .btn-agregar:hover { background:#163fa0;transform:translateY(-1px); }
 
+    /* ── Switch presentación ── */
+    .presentacion-wrap {
+        display:flex; align-items:center; gap:.55rem;
+        margin-left:auto;
+    }
+    .presentacion-label {
+        font-size:.72rem; font-weight:700; color:#1a4dad;
+        text-transform:uppercase; letter-spacing:.04em; white-space:nowrap;
+    }
+    .switch-track {
+        position:relative; display:inline-flex; align-items:center;
+        width:100px; height:28px; cursor:pointer; user-select:none;
+    }
+    .switch-track input { position:absolute; opacity:0; width:0; height:0; }
+    .switch-bg {
+        position:absolute; inset:0; border-radius:14px;
+        background:#2563eb; border:1.5px solid #1d4ed8;
+        transition:background .2s, border-color .2s;
+    }
+    .switch-track input:checked ~ .switch-bg {
+        background:#0891b2; border-color:#0e7490;
+    }
+    .switch-knob {
+        position:absolute; top:3px; left:4px;
+        width:20px; height:20px; border-radius:50%;
+        background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.25);
+        transition:transform .2s;
+        z-index:1;
+    }
+    .switch-track input:checked ~ .switch-knob { transform:translateX(72px); }
+    .switch-texts {
+        position:absolute; inset:0; display:flex;
+        align-items:center; justify-content:space-between;
+        padding:0 6px 0 28px; z-index:0;
+        font-size:.62rem; font-weight:700; color:#fff; pointer-events:none;
+        transition:padding .2s;
+    }
+    .switch-track input:checked ~ .switch-texts {
+        padding:0 28px 0 6px;
+    }
+    .switch-texts .sw-off { display:block; }
+    .switch-texts .sw-on  { display:none; }
+    .switch-track input:checked ~ .switch-texts .sw-off { display:none; }
+    .switch-track input:checked ~ .switch-texts .sw-on  { display:block; }
+
     .item-footer { display:flex;justify-content:flex-end;margin-top:.7rem; }
     .btn-volver {
         display:flex;align-items:center;gap:.3rem;background:#e0e0e0;border:1px solid #999;
@@ -330,13 +375,22 @@ $comencpo = implode("\n", $lines);
 
         <!-- ── Agregar nueva entrada ── -->
         <div class="agregar-card">
-            <div class="agregar-title">
-                <!-- <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
-                </svg> -->
+            <div class="agregar-title" style="display:flex;align-items:center;gap:.5rem;">
                 Agregar entrada
+                <div class="presentacion-wrap">
+                    <label class="switch-track" id="switchPresentacion" title="Refrigerado / Congelado">
+                        <input type="checkbox" id="switchPresentacionChk">
+                        <span class="switch-bg"></span>
+                        <span class="switch-knob"></span>
+                        <span class="switch-texts">
+                            <span class="sw-off">REFRIG.</span>
+                            <span class="sw-on">CONGEL.</span>
+                        </span>
+                    </label>
+                </div>
             </div>
             <form id="formAgregar" method="POST" action="/planilla-pedidos/<?= $nrodocUrl ?>/item/<?= $registroUrl ?>">
+                <input type="hidden" id="presentacionInput" name="presentacion" value="1">
                 <div class="form-row">
                     <div class="form-group">
                         <label for="lote">Lote</label>
@@ -374,23 +428,165 @@ $comencpo = implode("\n", $lines);
 
             <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
             <script>
+// ── Switch presentación: Refrigerado (1) / Congelado (2) ──
+(function() {
+    var chk   = document.getElementById('switchPresentacionChk');
+    var input = document.getElementById('presentacionInput');
+    chk.addEventListener('change', function() {
+        input.value = chk.checked ? '2' : '1';
+    });
+})();
+
+// ── Agregar entrada vía fetch (sin recarga de página) ──
 document.getElementById('formAgregar').addEventListener('submit', function(e) {
-    const btn = document.getElementById('btnAgregar');
-    const btnText = document.getElementById('btnText');
-    if (btn.disabled) {
-        e.preventDefault();
-        return;
-    }
-    btn.disabled = true;
-    btn.style.opacity = '0.7';
-    btn.style.cursor = 'not-allowed';
+    e.preventDefault();
+
+    var btn     = document.getElementById('btnAgregar');
+    var btnText = document.getElementById('btnText');
+    if (btn.disabled) return;
+
+    var cantidad = parseFloat(document.getElementById('cantidad').value);
+    if (!cantidad || cantidad <= 0) return;
+
+    btn.disabled       = true;
+    btn.style.opacity  = '0.7';
+    btn.style.cursor   = 'not-allowed';
     btnText.textContent = 'Procesando...';
-    setTimeout(function() {
-        document.getElementById('lote').disabled = true;
-        document.getElementById('temp').disabled = true;
-        document.getElementById('cantidad').disabled = true;
-    }, 0);
+
+    var form    = document.getElementById('formAgregar');
+    var nrodoc  = <?= json_encode($pedido['nrodoc']) ?>;
+    var registro = <?= json_encode($item['registro']) ?>;
+    var url     = '/planilla-pedidos/' + encodeURIComponent(nrodoc)
+                + '/item/' + encodeURIComponent(registro) + '/agregar';
+
+    var data = new FormData(form);
+
+    fetch(url, { method: 'POST', body: data })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+            if (!res.ok) {
+                alert('Error: ' + (res.error || 'No se pudo agregar'));
+                return;
+            }
+
+            // ── Actualizar tabla de lotes ──
+            var tbody   = document.querySelector('.lotes-table tbody');
+            var isEmpty = tbody.querySelector('.lotes-empty');
+            if (isEmpty) isEmpty.closest('tr').remove();
+
+            // Quitar fila de total anterior
+            var totalRow = tbody.querySelector('.lotes-total');
+            if (totalRow) totalRow.remove();
+
+            // Reconstruir filas desde los lotes devueltos
+            tbody.innerHTML = '';
+            if (res.lotes.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="lotes-empty">Sin entradas — use el formulario para agregar.</td></tr>';
+            } else {
+                var totalLotes = 0;
+                res.lotes.forEach(function(lt) {
+                    totalLotes += parseFloat(lt.cantidad);
+                    var tr = document.createElement('tr');
+                    var loteDisplay = (lt.lote || '').trim() || '—';
+                    var temp = parseFloat(lt.temp).toFixed(2);
+                    var cant = parseFloat(lt.cantidad).toFixed(3);
+                    var horaDisplay = lt.hora || '';
+                    tr.innerHTML =
+                        '<td class="mono">' + escHtml(horaDisplay) + '</td>' +
+                        '<td>' + escHtml(loteDisplay) + '</td>' +
+                        '<td class="mono">' + temp + '</td>' +
+                        '<td class="mono">' + cant + '</td>' +
+                        '<td>' +
+                          '<form method="POST" action="/planilla-pedidos/' + escHtml(nrodoc) + '/item/' + escHtml(registro) + '/eliminar"' +
+                          ' onsubmit="return confirm(\'¿Eliminar esta entrada?\')">' +
+                          '<input type="hidden" name="hora" value="' + escHtml(horaDisplay) + '">' +
+                          '<button type="submit" class="btn-del">✕</button>' +
+                          '</form>' +
+                        '</td>';
+                    tbody.appendChild(tr);
+                });
+                var trTotal = document.createElement('tr');
+                trTotal.className = 'lotes-total';
+                trTotal.innerHTML =
+                    '<td colspan="3" style="text-align:right;font-size:.73rem;color:#555;font-weight:600;">Total lotes</td>' +
+                    '<td class="mono">' + totalLotes.toFixed(3) + '</td>' +
+                    '<td></td>';
+                tbody.appendChild(trTotal);
+            }
+
+            // ── Actualizar stats y barra de progreso ──
+            var cantent  = res.cantent;
+            var cantidad = res.cantidad;
+            var pct      = cantidad > 0 ? Math.min(Math.round(cantent / cantidad * 100), 100) : 0;
+            var dotColor, dotLabel;
+            if (cantent <= 0)                          { dotColor = '#dc2626'; dotLabel = 'Sin procesar'; }
+            else if (cantent >= cantidad && cantidad > 0) { dotColor = '#16a34a'; dotLabel = 'Completo'; }
+            else                                         { dotColor = '#ca8a04'; dotLabel = 'Parcial'; }
+
+            // Stat "Alistado"
+            var statBoxes = document.querySelectorAll('.stat-box .stat-value');
+            if (statBoxes[1]) {
+                statBoxes[1].textContent = cantent.toFixed(3);
+                statBoxes[1].style.color = dotColor;
+            }
+            // Stat "Diferencia"
+            var diferencia = Math.max(cantidad - cantent, 0);
+            if (statBoxes[2]) {
+                statBoxes[2].textContent = diferencia.toFixed(3);
+                statBoxes[2].style.color = diferencia > 0 ? '#dc2626' : '#16a34a';
+            }
+            // Barra de progreso
+            var pbarFill = document.querySelector('.pbar-fill');
+            if (pbarFill) {
+                pbarFill.style.width = pct + '%';
+                pbarFill.style.background = pct >= 100 ? '#16a34a' : (pct > 0 ? '#ca8a04' : '#dc2626');
+            }
+            var pbarPct = document.querySelector('.progress-wrap span');
+            if (pbarPct) pbarPct.textContent = pct + '%';
+
+            // Badge "Listo"
+            var progressWrap = document.querySelector('.progress-wrap');
+            var badgeListo   = progressWrap ? progressWrap.querySelector('.badge-listo') : null;
+            if (pct >= 100) {
+                if (!badgeListo && progressWrap) {
+                    var b = document.createElement('span');
+                    b.className   = 'badge-listo';
+                    b.textContent = '✓ Listo';
+                    progressWrap.appendChild(b);
+                }
+            } else {
+                if (badgeListo) badgeListo.remove();
+            }
+
+            // Status pill del header
+            var dot   = document.querySelector('.dot-sm');
+            var label = document.querySelector('.status-pill');
+            if (dot)   dot.style.background = dotColor;
+            if (label) label.childNodes[label.childNodes.length - 1].textContent = ' ' + dotLabel;
+
+            // ── Limpiar formulario y re-enfocar ──
+            document.getElementById('lote').value     = '';
+            document.getElementById('temp').value     = '';
+            document.getElementById('cantidad').value = '';
+            document.getElementById('cantidad').focus();
+        })
+        .catch(function(err) {
+            console.error(err);
+            alert('Error de red. Intente nuevamente.');
+        })
+        .finally(function() {
+            btn.disabled       = false;
+            btn.style.opacity  = '';
+            btn.style.cursor   = '';
+            btnText.textContent = 'Agregar';
+        });
 });
+
+function escHtml(str) {
+    return String(str)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
 // ── Escaneo QR mejorado para iPad y otros dispositivos ──
 document.getElementById('btnScanQr').addEventListener('click', function() {

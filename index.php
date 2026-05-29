@@ -19,6 +19,7 @@ use App\Middleware\AuthMiddleware;
 use App\Controllers\PlanillaPedidosController;
 use App\Controllers\PreparacionPedidoController;
 use App\Controllers\StickerController;
+use App\Controllers\InvCaducidadController;
 
 // ── Entorno ───────────────────────────────────────────────
 $dotenv = Dotenv::createImmutable(__DIR__);
@@ -332,11 +333,49 @@ $app->group('', function ($group) {
         return $response->withHeader('Location', '/usuarios')->withStatus(302);
     });
 
+
     $group->post('/usuarios/{id}/delete', function ($request, $response, $args) {
         $GLOBALS['db']->delete("users", ["id" => (int)$args['id']]);
         $_SESSION['success'] = "Usuario eliminado.";
         return $response->withHeader('Location', '/usuarios')->withStatus(302);
     });
+    // ── Caducidad en Productos ─────────────────────────────
+    $group->get('/inv-caducidad', function ($request, $response) {
+        $ctrl = new InvCaducidadController($GLOBALS['db']);
+        return $ctrl->index($request, $response);
+    });
+
+    $group->get('/inv-caducidad/create', function ($request, $response) {
+        $ctrl = new InvCaducidadController($GLOBALS['db']);
+        return $ctrl->create($request, $response);
+    });
+
+    $group->post('/inv-caducidad/store', function ($request, $response) {
+        $ctrl = new InvCaducidadController($GLOBALS['db']);
+        return $ctrl->store($request, $response);
+    });
+
+    $group->get('/inv-caducidad/{canal}/{codgrupo}/{codsubg}', function ($request, $response, $args) {
+        $ctrl = new InvCaducidadController($GLOBALS['db']);
+        return $ctrl->show($request, $response, $args);
+    });
+
+    $group->get('/inv-caducidad/{canal}/{codgrupo}/{codsubg}/edit', function ($request, $response, $args) {
+        $ctrl = new InvCaducidadController($GLOBALS['db']);
+        return $ctrl->edit($request, $response, $args);
+    });
+
+    $group->post('/inv-caducidad/{canal}/{codgrupo}/{codsubg}/update', function ($request, $response, $args) {
+        $ctrl = new InvCaducidadController($GLOBALS['db']);
+        return $ctrl->update($request, $response, $args);
+    });
+
+    $group->post('/inv-caducidad/{canal}/{codgrupo}/{codsubg}/delete', function ($request, $response, $args) {
+        $ctrl = new InvCaducidadController($GLOBALS['db']);
+        return $ctrl->delete($request, $response, $args);
+    });
+
+
 
 })->add($authMiddleware);
 

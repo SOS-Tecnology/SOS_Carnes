@@ -134,10 +134,12 @@ class PlanillaPedidosController
     {
         $nrodoc   = trim($args['nrodoc']);
         $registro = trim($args['registro']);
-        $body     = $request->getParsedBody();
-        $lote     = trim($body['lote']      ?? '');
-        $temp     = (float)($body['temp']   ?? 0);
-        $cantidad = (float)($body['cantidad'] ?? 0);
+        $body         = $request->getParsedBody();
+        $lote         = trim($body['lote']         ?? '');
+        $temp         = (float)($body['temp']       ?? 0);
+        $cantidad     = (float)($body['cantidad']   ?? 0);
+        $presentacion = (int)($body['presentacion'] ?? 1);
+        if ($presentacion < 1 || $presentacion > 2) { $presentacion = 1; }
 
         if ($cantidad <= 0) {
             return $response->withHeader('Location',
@@ -181,19 +183,20 @@ class PlanillaPedidosController
 
             // Insertar en itemmov
             $this->db->pdo->prepare("
-                INSERT INTO itemmov (tm, prefijo, documento, codr, descr, cantidad, lote, registro, itemre, temp, hora)
-                VALUES ('PV', :prefijo, :doc, :codr, :descr, :cantidad, :lote, :registro, :itemre, :temp, :hora)
+                INSERT INTO itemmov (tm, prefijo, documento, codr, descr, cantidad, lote, registro, itemre, temp, hora, presentacion)
+                VALUES ('PV', :prefijo, :doc, :codr, :descr, :cantidad, :lote, :registro, :itemre, :temp, :hora, :presentacion)
             ")->execute([
-                ':prefijo'  => trim($item['prefijo']),
-                ':doc'      => trim($nrodoc),
-                ':codr'     => trim($item['codr']),
-                ':descr'    => trim($item['descr']),
-                ':cantidad' => $cantidad,
-                ':lote'     => $lote,
-                ':registro' => trim($registro),
-                ':itemre'   => $newItemre,
-                ':temp'     => $temp,
-                ':hora'     => $hora,
+                ':prefijo'       => trim($item['prefijo']),
+                ':doc'           => trim($nrodoc),
+                ':codr'          => trim($item['codr']),
+                ':descr'         => trim($item['descr']),
+                ':cantidad'      => $cantidad,
+                ':lote'          => $lote,
+                ':registro'      => trim($registro),
+                ':itemre'        => $newItemre,
+                ':temp'          => $temp,
+                ':hora'          => $hora,
+                ':presentacion'  => $presentacion,
             ]);
 
             // Recalcular cantent en la misma transacción
@@ -209,6 +212,104 @@ class PlanillaPedidosController
         return $response->withHeader('Location',
             '/planilla-pedidos/' . urlencode($nrodoc) . '/item/' . urlencode($registro)
         )->withStatus(302);
+    }
+
+    public function agregarEntradaJson($request, $response, $args): mixed
+    {
+        $nrodoc   = trim($args['nrodoc']);
+        $registro = trim($args['registro']);
+        $body         = $request->getParsedBody();
+        $lote         = trim($body['lote']         ?? '');
+        $temp         = (float)($body['temp']       ?? 0);
+        $cantidad     = (float)($body['cantidad']   ?? 0);
+        $presentacion = (int)($body['presentacion'] ?? 1);
+        if ($presentacion < 1 || $presentacion > 2) { $presentacion = 1; }
+
+        if ($cantidad <= 0) {
+            $response->getBody()->write(json_encode(['ok' => false, 'error' => 'Cantidad inválida']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(422);
+        }
+
+        try {
+            $this->db->pdo->beginTransaction();
+
+            $itStmt = $this->db->pdo->prepare("
+                SELECT TRIM(cm.codr)    AS codr,
+                       TRIM(cm.descr)   AS descr,
+                       TRIM(cm.prefijo) AS prefijo,
+                       cm.cantidad      AS cantidadPedida
+                FROM cuerpomov cm
+                WHERE TRIM(cm.tm)        = 'PV'
+                  AND TRIM(cm.documento) = :doc
+                  AND TRIM(cm.registro)  = :registro
+                LIMIT 1
+            ");
+            $itStmt->execute([':doc' => $nrodoc, ':registro' => $registro]);
+            $item = $itStmt->fetch(\PDO::FETCH_ASSOC);
+            if (!$item) {
+                $this->db->pdo->rollBack();
+                $response->getBody()->write(json_encode(['ok' => false, 'error' => 'Ítem no encontrado']));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
+            }
+
+            $nrStmt = $this->db->pdo->prepare("
+                SELECT COALESCE(MAX(CAST(itemre AS UNSIGNED)), 0) + 1
+                FROM itemmov
+                WHERE TRIM(tm) = 'PV' AND TRIM(prefijo) = :prefijo
+                  AND TRIM(documento) = :doc AND TRIM(registro) = :registro
+            ");
+            $nrStmt->execute([':prefijo' => $item['prefijo'], ':doc' => $nrodoc, ':registro' => $registro]);
+            $newItemre = (string)($nrStmt->fetchColumn() ?: 1);
+
+            $hora = date('H:i:s');
+
+            $this->db->pdo->prepare("
+                INSERT INTO itemmov (tm, prefijo, documento, codr, descr, cantidad, lote, registro, itemre, temp, hora, presentacion)
+                VALUES ('PV', :prefijo, :doc, :codr, :descr, :cantidad, :lote, :registro, :itemre, :temp, :hora, :presentacion)
+            ")->execute([
+                ':prefijo'      => trim($item['prefijo']),
+                ':doc'          => trim($nrodoc),
+                ':codr'         => trim($item['codr']),
+                ':descr'        => trim($item['descr']),
+                ':cantidad'     => $cantidad,
+                ':lote'         => $lote,
+                ':registro'     => trim($registro),
+                ':itemre'       => $newItemre,
+                ':temp'         => $temp,
+                ':hora'         => $hora,
+                ':presentacion' => $presentacion,
+            ]);
+
+            $this->recalcCantent(trim($nrodoc), trim($item['prefijo']), trim($item['codr']), trim($registro));
+
+            $this->db->pdo->commit();
+
+            // Leer cantent actualizado
+            $ce = $this->db->pdo->prepare("
+                SELECT cantent FROM cuerpomov
+                WHERE TRIM(tm) = 'PV' AND TRIM(prefijo) = :prefijo
+                  AND TRIM(documento) = :doc AND TRIM(registro) = :registro
+                LIMIT 1
+            ");
+            $ce->execute([':prefijo' => trim($item['prefijo']), ':doc' => $nrodoc, ':registro' => $registro]);
+            $cantent = (float)($ce->fetchColumn() ?: 0);
+
+            // Leer todos los lotes actualizados
+            $lotes = $this->getItemmovEntries($nrodoc, trim($item['prefijo']), trim($item['codr']), $registro);
+
+            $response->getBody()->write(json_encode([
+                'ok'      => true,
+                'cantent' => $cantent,
+                'cantidad'=> (float)$item['cantidadPedida'],
+                'lotes'   => $lotes,
+            ]));
+            return $response->withHeader('Content-Type', 'application/json');
+
+        } catch (\Exception $e) {
+            $this->db->pdo->rollBack();
+            $response->getBody()->write(json_encode(['ok' => false, 'error' => $e->getMessage()]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
     }
 
     public function eliminarLote($request, $response, $args): mixed
