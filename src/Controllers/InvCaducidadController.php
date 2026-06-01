@@ -31,7 +31,7 @@ class InvCaducidadController
             LEFT JOIN ingrupos   ig  ON TRIM(ig.codgrupo)  = TRIM(ic.codgrupo)
             LEFT JOIN insubgrupo is2 ON TRIM(is2.codgrupo) = TRIM(ic.codgrupo)
                                     AND TRIM(is2.codsubg)  = TRIM(ic.codsubg)
-            ORDER BY ic.canal, ic.codgrupo, ic.codsubg
+            ORDER BY ic.canal, ic.codgrupo, ic.codsubg, ic.presentacion
         ");
         $stmt->execute();
         $registros = $stmt->fetchAll(\PDO::FETCH_ASSOC);
@@ -110,13 +110,14 @@ class InvCaducidadController
     {
         $stmt = $this->db->pdo->prepare("
             SELECT * FROM inv_caducidad
-            WHERE TRIM(canal) = :canal AND TRIM(codgrupo) = :codgrupo AND TRIM(codsubg) = :codsubg
+            WHERE TRIM(canal) = :canal AND TRIM(codgrupo) = :codgrupo AND TRIM(codsubg) = :codsubg  AND TRIM(presentacion) = :presentacion
             LIMIT 1
         ");
         $stmt->execute([
             ':canal'    => trim($args['canal']),
             ':codgrupo' => trim($args['codgrupo']),
             ':codsubg'  => trim($args['codsubg']),
+            ':presentacion' => trim($args['presentacion']),
         ]);
         $registro = $stmt->fetch(\PDO::FETCH_ASSOC);
 
@@ -150,13 +151,14 @@ class InvCaducidadController
         $this->db->pdo->prepare("
             UPDATE inv_caducidad
             SET presentacion = :presentacion, cantidad = :cantidad
-            WHERE TRIM(canal) = :canal AND TRIM(codgrupo) = :codgrupo AND TRIM(codsubg) = :codsubg
+            WHERE TRIM(canal) = :canal AND TRIM(codgrupo) = :codgrupo AND TRIM(codsubg) = :codsubg  AND TRIM(presentacion) = :presentacion
         ")->execute([
             ':presentacion' => $presentacion,
             ':cantidad'     => $cantidad,
             ':canal'        => trim($args['canal']),
             ':codgrupo'     => trim($args['codgrupo']),
             ':codsubg'      => trim($args['codsubg']),
+            ':presentacion' => trim($args['presentacion']),
         ]);
 
         $_SESSION['success'] = 'Registro actualizado correctamente.';
