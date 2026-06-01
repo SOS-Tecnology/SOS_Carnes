@@ -92,7 +92,8 @@ if (isset($_SESSION['errors'])) {
     }
     .prep-wrap .item-card:last-child { margin-bottom: 0; }
     .prep-wrap .item-card-top {
-        display: flex; align-items: flex-start; gap: .8rem; margin-bottom: .5rem;
+        display: flex; align-items: flex-start; gap: .5rem; margin-bottom: .5rem;
+        flex-wrap: wrap;
     }
     .prep-wrap .item-num {
         background: #1a4dad; color: #fff;
@@ -380,6 +381,27 @@ if (isset($_SESSION['errors'])) {
                         <?php if ($esIntegrado): ?>
                             <span class="item-origen-badge">PV <?= htmlspecialchars(str_pad($docOrigen, 8, '0', STR_PAD_LEFT)) ?></span>
                         <?php endif; ?>
+                        <?php
+                            $presInt   = (int)($it['presentacion_int'] ?? 1);
+                            $presLabel = $it['presentacion_label'] ?? 'Refrigeración';
+                            $diasVenc  = $it['dias_vencimiento'] ?? null;
+                            $presColor = $presInt === 2
+                                ? ['bg' => '#e0f2fe', 'text' => '#0369a1', 'border' => '#bae6fd']
+                                : ['bg' => '#dcfce7', 'text' => '#15803d', 'border' => '#bbf7d0'];
+                        ?>
+                        <span style="font-size:.68rem;font-weight:700;padding:.2rem .5rem;border-radius:.25rem;
+                                     background:<?= $presColor['bg'] ?>;color:<?= $presColor['text'] ?>;
+                                     border:1px solid <?= $presColor['border'] ?>;white-space:nowrap;">
+                            <?= $presInt === 2 ? '❄️' : '🌡️' ?> <?= htmlspecialchars($presLabel) ?>
+                        </span>
+                        <span style="font-size:.68rem;font-weight:700;padding:.2rem .5rem;border-radius:.25rem;
+                                     background:<?= $diasVenc !== null ? '#fef9c3' : '#f3f4f6' ?>;
+                                     color:<?= $diasVenc !== null ? '#854d0e' : '#6b7280' ?>;
+                                     border:1px solid <?= $diasVenc !== null ? '#fde68a' : '#e5e7eb' ?>;
+                                     white-space:nowrap;"
+                              title="Días de vencimiento según inv_caducidad">
+                            🗓️ <?= $diasVenc !== null ? $diasVenc . ' días' : 'N/A' ?>
+                        </span>
                     </div>
 
                     <?php if ($obs !== ''): ?>
@@ -403,7 +425,7 @@ if (isset($_SESSION['errors'])) {
 
                         <?php foreach ($lotes as $li => $lote):
                             $lotePeso   = (float)$lote['cantidad'];
-                            $loteId     = trim($lote['lote'] ?? ($lote['numlote'] ?? ''));
+                            $loteId     = trim($lote['lote'] ?? '');
                             $loteObs    = trim($lote['observacion'] ?? '');
                             $idxLote    = $globalIdx . '_' . $li;
                         ?>
@@ -428,7 +450,9 @@ if (isset($_SESSION['errors'])) {
                                         '<?= htmlspecialchars(addslashes($it['descripcion'])) ?>',
                                         '<?= number_format($lotePeso, 3, '.', '') ?>',
                                         '<?= htmlspecialchars(addslashes($loteId)) ?>',
-                                        '<?= htmlspecialchars(addslashes($docOrigen)) ?>')">
+                                        '<?= htmlspecialchars(addslashes($docOrigen)) ?>',
+                                        <?= (int)($diasVenc ?? 0) ?>,
+                                        '<?= htmlspecialchars(addslashes($it['presentacion_label'] ?? '')) ?>')">
                                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                     <path stroke-linecap="round" stroke-linejoin="round"
                                           d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4H9a2 2 0 00-2 2v2a2 2 0 002 2h6a2 2 0 002-2v-2a2 2 0 00-2-2zm0 0h6"/>
@@ -472,7 +496,10 @@ if (isset($_SESSION['errors'])) {
                                     '<?= htmlspecialchars(addslashes($it['codart'])) ?>',
                                     '<?= htmlspecialchars(addslashes($it['descripcion'])) ?>',
                                     '<?= $globalIdx ?>',
-                                    '<?= htmlspecialchars(addslashes($docOrigen)) ?>')">
+                                    '<?= htmlspecialchars(addslashes($docOrigen)) ?>',
+                                    <?= (int)($diasVenc ?? 0) ?>,
+                                    '<?= htmlspecialchars(addslashes($it['presentacion_label'] ?? '')) ?>',
+                                    '<?= htmlspecialchars(addslashes($it['lote'] ?? '')) ?>')">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                 <path stroke-linecap="round" stroke-linejoin="round"
                                       d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4H9a2 2 0 00-2 2v2a2 2 0 002 2h6a2 2 0 002-2v-2a2 2 0 00-2-2zm0 0h6a2 2 0 002-2v-4a2 2 0 00-2-2h-.5"/>
@@ -510,7 +537,7 @@ if (isset($_SESSION['errors'])) {
     /**
      * Imprime sticker del campo consolidado (peso definitivo del item)
      */
-    function imprimirSticker(event, codart, descripcion, idx, docOrigen) {
+    function imprimirSticker(event, codart, descripcion, idx, docOrigen, diasVenc, presentacion, lote) {
         event.preventDefault();
         const pesoInput = document.getElementById('peso_' + idx);
         if (!pesoInput) {
@@ -536,15 +563,18 @@ if (isset($_SESSION['errors'])) {
         url.searchParams.append('codart', codart);
         url.searchParams.append('desc', descripcion);
         url.searchParams.append('peso', peso);
-        if (docOrigen) url.searchParams.append('docpv', docOrigen);
-        const w = window.open(url.toString(), '_blank', 'width=400,height=620,menubar=no,toolbar=no');
+        if (docOrigen)    url.searchParams.append('docpv',        docOrigen);
+        if (lote)         url.searchParams.append('lote',         lote);
+        if (diasVenc > 0) url.searchParams.append('dias_venc',    diasVenc);
+        if (presentacion) url.searchParams.append('presentacion', presentacion);
+        const w = window.open(url.toString(), '_blank', 'width=400,height=680,menubar=no,toolbar=no');
         if (w) w.focus();
     }
 
     /**
      * Imprime sticker de un lote específico de itemmov
      */
-    function imprimirStickerLote(event, codart, descripcion, peso, loteId, docOrigen) {
+    function imprimirStickerLote(event, codart, descripcion, peso, loteId, docOrigen, diasVenc, presentacion) {
         event.preventDefault();
         const pesoNum = parseFloat(peso);
         if (isNaN(pesoNum) || pesoNum <= 0) {
@@ -555,9 +585,11 @@ if (isset($_SESSION['errors'])) {
         url.searchParams.append('codart', codart);
         url.searchParams.append('desc', descripcion);
         url.searchParams.append('peso', peso);
-        if (loteId)    url.searchParams.append('lote',  loteId);
-        if (docOrigen) url.searchParams.append('docpv', docOrigen);
-        const w = window.open(url.toString(), '_blank', 'width=400,height=640,menubar=no,toolbar=no');
+        if (loteId)       url.searchParams.append('lote',         loteId);
+        if (docOrigen)    url.searchParams.append('docpv',        docOrigen);
+        if (diasVenc > 0) url.searchParams.append('dias_venc',    diasVenc);
+        if (presentacion) url.searchParams.append('presentacion', presentacion);
+        const w = window.open(url.toString(), '_blank', 'width=400,height=680,menubar=no,toolbar=no');
         if (w) w.focus();
     }
 

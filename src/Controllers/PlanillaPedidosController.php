@@ -298,10 +298,11 @@ class PlanillaPedidosController
             $lotes = $this->getItemmovEntries($nrodoc, trim($item['prefijo']), trim($item['codr']), $registro);
 
             $response->getBody()->write(json_encode([
-                'ok'      => true,
-                'cantent' => $cantent,
-                'cantidad'=> (float)$item['cantidadPedida'],
-                'lotes'   => $lotes,
+                'ok'           => true,
+                'cantent'      => $cantent,
+                'cantidad'     => (float)$item['cantidadPedida'],
+                'presentacion' => $presentacion,
+                'lotes'        => $lotes,
             ]));
             return $response->withHeader('Content-Type', 'application/json');
 
@@ -430,7 +431,7 @@ class PlanillaPedidosController
         $registro = trim($registro);
 
         $stmt = $this->db->pdo->prepare("
-            SELECT i.hora, i.lote, i.temp, i.cantidad
+            SELECT i.hora, i.lote, i.temp, i.cantidad, i.presentacion
             FROM itemmov i
             WHERE TRIM(i.tm)        = 'PV'
               AND TRIM(i.prefijo)   = :prefijo

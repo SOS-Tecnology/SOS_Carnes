@@ -340,6 +340,7 @@ $comencpo = implode("\n", $lines);
                         <th>Lote</th>
                         <th>Temp. °C</th>
                         <th>Peso</th>
+                        <th>Pres.</th>
                         <th></th>
                     </tr>
                 </thead>
@@ -354,6 +355,14 @@ $comencpo = implode("\n", $lines);
                             <td class="mono"><?= number_format((float)$lt['temp'], 2) ?></td>
                             <td class="mono"><?= number_format((float)$lt['cantidad'], 3) ?></td>
                             <td>
+                                <?php $pres = (int)($lt['presentacion'] ?? 1); ?>
+                                <span style="font-size:.68rem;font-weight:700;padding:.15rem .4rem;border-radius:4px;
+                                    background:<?= $pres === 2 ? '#e0f2fe' : '#dcfce7' ?>;
+                                    color:<?= $pres === 2 ? '#0369a1' : '#15803d' ?>;">
+                                    <?= $pres === 2 ? 'CONGEL.' : 'REFRIG.' ?>
+                                </span>
+                            </td>
+                            <td>
                                 <form method="POST"
                                       action="/planilla-pedidos/<?= $nrodocUrl ?>/item/<?= $registroUrl ?>/eliminar"
                                       onsubmit="return confirm('¿Eliminar esta entrada?')">
@@ -364,8 +373,9 @@ $comencpo = implode("\n", $lines);
                         </tr>
                         <?php endforeach; ?>
                         <tr class="lotes-total">
-                            <td colspan="3" style="text-align:right;font-size:.73rem;color:#555;font-weight:600;">Total lotes</td>
+                            <td colspan="4" style="text-align:right;font-size:.73rem;color:#555;font-weight:600;">Total lotes</td>
                             <td class="mono"><?= number_format($totalLotes, 3) ?></td>
+                            <td></td>
                             <td></td>
                         </tr>
                     <?php endif; ?>
@@ -379,7 +389,7 @@ $comencpo = implode("\n", $lines);
                 Agregar entrada
                 <div class="presentacion-wrap">
                     <label class="switch-track" id="switchPresentacion" title="Refrigerado / Congelado">
-                        <input type="checkbox" id="switchPresentacionChk">
+                        <input type="checkbox" id="switchPresentacionChk"<?php echo (!empty($lotes) && (int)end($lotes)["presentacion"] === 2) ? " checked" : ""; ?>>
                         <span class="switch-bg"></span>
                         <span class="switch-knob"></span>
                         <span class="switch-texts">
@@ -390,7 +400,7 @@ $comencpo = implode("\n", $lines);
                 </div>
             </div>
             <form id="formAgregar" method="POST" action="/planilla-pedidos/<?= $nrodocUrl ?>/item/<?= $registroUrl ?>">
-                <input type="hidden" id="presentacionInput" name="presentacion" value="1">
+                <input type="hidden" id="presentacionInput" name="presentacion" value="<?php echo (!empty($lotes) && (int)end($lotes)["presentacion"] === 2) ? "2" : "1"; ?>">
                 <div class="form-row">
                     <div class="form-group">
                         <label for="lote">Lote</label>

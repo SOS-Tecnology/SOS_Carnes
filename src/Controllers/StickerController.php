@@ -28,35 +28,61 @@ class StickerController
         $descripcion = trim($queryParams['desc'] ?? '');
         $pesoStr     = trim($queryParams['peso'] ?? '0');
         $peso        = (float)$pesoStr;
-        $loteId      = trim($queryParams['lote']  ?? '');   // lote de itemmov
-        $docPV       = trim($queryParams['docpv'] ?? '');   // pedido origen
-        
+        $loteId      = trim($queryParams['lote']         ?? '');
+        $docPV       = trim($queryParams['docpv']        ?? '');
+        $diasVenc    = (int)($queryParams['dias_venc']   ?? 0);
+        $presentacion = trim($queryParams['presentacion'] ?? '');
+
         // Validar que el peso sea válido y mayor a 0
         $validacion = MessageFormatter::validateWeight($peso);
         if (!$validacion['valid']) {
             return $this->renderErrorPage($response, $validacion['message']);
         }
-        
+
         $fechaHoy    = date('d/m/Y');
         $horaActual  = date('H:i');
+
+        // Calcular fecha de vencimiento
+        $fechaVencimiento = '';
+        if ($diasVenc > 0) {
+            $fechaVencimiento = date('d/m/Y', strtotime("+{$diasVenc} days"));
+        }
         
-        // Datos para el QR: código|descripción|peso[|lote][|docpv]
+        // Datos para el QR: código|descripción|peso[|lote]
         $qrData = "{$codart}|{$descripcion}|{$pesoStr}";
         if ($loteId !== '') $qrData .= "|L:{$loteId}";
-        if ($docPV  !== '') $qrData .= "|PV:{$docPV}";
         
         // URL para generar el QR usando API pública (qr-server.com)
         $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' . urlencode($qrData);
         
-        // Escapar datos
-        $codartEsc   = htmlspecialchars($codart, ENT_QUOTES, 'UTF-8');
-        $loteEsc     = $loteId !== '' ? htmlspecialchars($loteId, ENT_QUOTES, 'UTF-8') : '';
-        $docPVEsc    = $docPV  !== '' ? htmlspecialchars(str_pad($docPV, 8, '0', STR_PAD_LEFT), ENT_QUOTES, 'UTF-8') : '';
-        $descEsc     = htmlspecialchars($descripcion, ENT_QUOTES, 'UTF-8');
-        $pesoEsc     = htmlspecialchars($pesoStr, ENT_QUOTES, 'UTF-8');
-        $dirEsc      = htmlspecialchars(self::EMPRESA_DIRECCION, ENT_QUOTES, 'UTF-8');
-        $telEsc      = htmlspecialchars(self::EMPRESA_TELEFONOS, ENT_QUOTES, 'UTF-8');
-        $empresaEsc  = htmlspecialchars(self::EMPRESA_NOMBRE, ENT_QUOTES, 'UTF-8');
+        $codartEsc    = htmlspecialchars($codart,       ENT_QUOTES, 'UTF-8');
+        $loteEsc      = $loteId !== ''       ? htmlspecialchars($loteId,       ENT_QUOTES, 'UTF-8') : '';
+        $docPVEsc     = $docPV  !== ''       ? htmlspecialchars(str_pad($docPV, 8, '0', STR_PAD_LEFT), ENT_QUOTES, 'UTF-8') : '';
+        $descEsc      = htmlspecialchars($descripcion,  ENT_QUOTES, 'UTF-8');
+        $pesoEsc      = htmlspecialchars($pesoStr,      ENT_QUOTES, 'UTF-8');
+        $presEsc      = htmlspecialchars($presentacion, ENT_QUOTES, 'UTF-8');
+        $vencEsc      = htmlspecialchars($fechaVencimiento, ENT_QUOTES, 'UTF-8');
+        $dirEsc       = htmlspecialchars(self::EMPRESA_DIRECCION, ENT_QUOTES, 'UTF-8');
+        $telEsc       = htmlspecialchars(self::EMPRESA_TELEFONOS, ENT_QUOTES, 'UTF-8');
+        $empresaEsc   = htmlspecialchars(self::EMPRESA_NOMBRE,    ENT_QUOTES, 'UTF-8');
+
+        // ── Bloques condicionales pre-calculados para el heredoc ──────────
+        // Lote + Fecha de vencimiento en la misma línea
+        $loteVencLine = '';
+        if ($loteEsc !== '') $loteVencLine .= "Lote: <strong>{$loteEsc}</strong>";
+        if ($loteEsc !== '' && $vencEsc !== '') $loteVencLine .= '&nbsp;&nbsp;';
+        if ($vencEsc !== '') $loteVencLine .= "Vence: <strong>{$vencEsc}</strong>";
+
+        $htmlMetaBlock = '';
+        if ($loteVencLine !== '' || $presEsc !== '') {
+            $rows = '';
+            if ($loteVencLine !== '') $rows .= "<div>{$loteVencLine}</div>";
+            if ($presEsc !== '')      $rows .= "<div>Presentaci&oacute;n: <strong>{$presEsc}</strong></div>";
+            $htmlMetaBlock = "<div style=\"font-size:8px;color:#000;margin:1.5mm 0;padding:1.5mm 2mm;border:1px solid #000;width:100%;line-height:1.9;text-align:left;\">{$rows}</div>";
+        }
+
+        // Bloque fecha vencimiento separado ya no se usa (está integrado arriba)
+        $htmlVencBlock = '';
         
         // HTML del sticker con validación de tamaño en comentario
         $html = <<<EOT
@@ -148,7 +174,6 @@ class StickerController
             margin: 3mm 0;
             border: 2px solid #000;
             padding: 3mm 5mm;
-            background: #f9f9f9;
             min-width: 40mm;
         }
         
@@ -167,7 +192,7 @@ class StickerController
             font-size: 8px;
             text-align: center;
             margin: 1mm 0;
-            color: #333;
+            color: #000;
         }
         
         .footer {
@@ -225,13 +250,8 @@ class StickerController
             <!-- Descripción -->
             <div class="descripcion">$descEsc</div>
             
-            <!-- Lote / Pedido Origen -->
-            <?php if ($loteEsc !== '' || $docPVEsc !== ''): ?>
-            <div style="font-size:7px;color:#444;margin:1.5mm 0;padding:1mm 2mm;background:#f9f9f9;border:1px solid #eee;">
-                <?php if ($docPVEsc !== ''): ?>PV: <strong><?= $docPVEsc ?></strong><?php endif; ?>
-                <?php if ($loteEsc !== ''): ?>&nbsp;Lote: <strong><?= $loteEsc ?></strong><?php endif; ?>
-            </div>
-            <?php endif; ?>
+            <!-- Lote + Vencimiento / Presentación -->
+            $htmlMetaBlock
             
             <!-- Peso destacado -->
             <div class="peso-destacado">
@@ -243,9 +263,9 @@ class StickerController
                 <img src="$qrUrl" alt="QR Code" onerror="this.style.display='none'">
             </div>
             
-            <!-- Fecha y Hora -->
+            <!-- Fecha y Hora de elaboración -->
             <div class="fecha-hora">
-                $fechaHoy $horaActual
+                Elaboraci&oacute;n: $fechaHoy $horaActual
             </div>
         </div>
         
@@ -370,5 +390,3 @@ EOT;
             ->withStatus(400);
     }
 }
-
-

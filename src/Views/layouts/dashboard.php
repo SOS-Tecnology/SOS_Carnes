@@ -217,7 +217,15 @@
                            2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>',
                     $currentPath
                 ); ?>
-
+                <!-- Caducidad en Productos -->
+                <?php sbItem(
+                    '/inv-caducidad', 'Caducidad en Productos',
+                    '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0
+                           00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>',
+                    $currentPath
+                ); ?>
+                
                 <div class="border-t border-gray-700 mx-4 my-2"></div>
 
                 <!-- Usuarios -->

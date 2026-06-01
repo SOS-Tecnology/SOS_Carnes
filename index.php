@@ -229,6 +229,10 @@ $app->group('', function ($group) {
         $ctrl = new PlanillaPedidosController($GLOBALS['db']);
         return $ctrl->eliminarLote($request, $response, $args);
     });
+    $group->post('/planilla-pedidos/{nrodoc}/item/{registro}/agregar', function ($request, $response, $args) {
+    $ctrl = new PlanillaPedidosController($GLOBALS['db']);
+    return $ctrl->agregarEntradaJson($request, $response, $args);
+    });
 
     // ── Preparación de Pedido ─────────────────────────────
     $group->get('/preparacion-pedido', function ($request, $response) {

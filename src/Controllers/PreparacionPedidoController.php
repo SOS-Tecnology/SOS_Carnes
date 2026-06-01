@@ -230,6 +230,7 @@ class PreparacionPedidoController
                        TRIM(cm.codr)     AS codart,
                        TRIM(cm.descr)    AS descripcion,
                        TRIM(cm.comencpo) AS comencpo,
+                       TRIM(cm.lote)     AS lote,
                        cm.unidad,
                        cm.cantidad,
                        cm.cantent,
@@ -256,21 +257,99 @@ class PreparacionPedidoController
             foreach ($docItems as &$it) {
                 $lotesStmt = $this->db->pdo->prepare("
                     SELECT TRIM(i.registro)  AS registro,
-                           TRIM(i.lote)   AS lote,
-                           i.cantidad
+                           TRIM(i.lote)      AS lote,
+                           i.cantidad,
+                           i.presentacion
                     FROM   itemmov i
                     WHERE  TRIM(i.tm)        = 'PV'
                       AND  TRIM(i.prefijo)   = :prefijo
                       AND  TRIM(i.documento) = :doc
                       AND  TRIM(i.registro)  = :reg
-                    ORDER  BY i.registro ASC
+                    ORDER  BY i.hora ASC
                 ");
                 $lotesStmt->execute([
                     ':prefijo' => $pref,
                     ':doc'     => $doc,
                     ':reg'     => trim($it['registro'])
                 ]);
-                $it['lotes'] = $lotesStmt->fetchAll(\PDO::FETCH_ASSOC);
+                $lotes = $lotesStmt->fetchAll(\PDO::FETCH_ASSOC);
+                $it['lotes'] = $lotes;
+
+                // ── Presentación del ítem: valor del último lote registrado ──
+                $lastLote = !empty($lotes) ? end($lotes) : null;
+                $presInt  = (int)($lastLote['presentacion'] ?? 1);
+                // Mapeo entero → valor exacto del enum en inv_caducidad
+                $presEnumMap = [
+                    1 => 'Refrigeración',
+                    2 => 'Congelación',
+                ];
+                $it['presentacion_label'] = $presEnumMap[$presInt] ?? 'Refrigeración';
+                $it['presentacion_int']   = $presInt;
+
+                // ── Días de vencimiento desde inv_caducidad ──────────────────
+                // Obtener codgrupo/codsubg del artículo desde inrefinv
+                $refStmt = $this->db->pdo->prepare("
+                    SELECT TRIM(r.codgrupo) AS codgrupo,
+                           TRIM(r.codsubg)  AS codsubg
+                    FROM   inrefinv r
+                    WHERE  TRIM(r.codr) = :codr
+                    LIMIT 1
+                ");
+                $refStmt->execute([':codr' => trim($it['codart'])]);
+                $ref = $refStmt->fetch(\PDO::FETCH_ASSOC);
+
+                $it['dias_vencimiento'] = null; // null => N/A
+
+                if ($ref && $ref['codgrupo'] !== '' && $ref['codsubg'] !== '') {
+                    $canal    = trim($pedidoBase['codtipocli'] ?? '');
+                    $codcli   = trim($pedidoBase['codcp'] ?? '');
+                    $presLabel = $it['presentacion_label']; // 'Refrigeración' o 'Congelación'
+
+                    // 1. Buscar con cliente específico
+                    $cadStmt = $this->db->pdo->prepare("
+                        SELECT ic.cantidad
+                        FROM   inv_caducidad ic
+                        WHERE  TRIM(ic.canal)         = :canal
+                          AND  TRIM(ic.codgrupo)      = :codgrupo
+                          AND  TRIM(ic.codsubg)       = :codsubg
+                          AND  TRIM(ic.presentacion)  = :presentacion
+                          AND  TRIM(ic.codc)          = :codc
+                        LIMIT 1
+                    ");
+                    $cadStmt->execute([
+                        ':canal'        => $canal,
+                        ':codgrupo'     => $ref['codgrupo'],
+                        ':codsubg'      => $ref['codsubg'],
+                        ':presentacion' => $presLabel,
+                        ':codc'         => $codcli,
+                    ]);
+                    $cadRow = $cadStmt->fetch(\PDO::FETCH_ASSOC);
+
+                    // 2. Si no existe, buscar genérico (codc IS NULL)
+                    if (!$cadRow) {
+                        $cadGenStmt = $this->db->pdo->prepare("
+                            SELECT ic.cantidad
+                            FROM   inv_caducidad ic
+                            WHERE  TRIM(ic.canal)        = :canal
+                              AND  TRIM(ic.codgrupo)     = :codgrupo
+                              AND  TRIM(ic.codsubg)      = :codsubg
+                              AND  TRIM(ic.presentacion) = :presentacion
+                              AND  ic.codc IS NULL
+                            LIMIT 1
+                        ");
+                        $cadGenStmt->execute([
+                            ':canal'        => $canal,
+                            ':codgrupo'     => $ref['codgrupo'],
+                            ':codsubg'      => $ref['codsubg'],
+                            ':presentacion' => $presLabel,
+                        ]);
+                        $cadRow = $cadGenStmt->fetch(\PDO::FETCH_ASSOC);
+                    }
+
+                    if ($cadRow) {
+                        $it['dias_vencimiento'] = (int)$cadRow['cantidad'];
+                    }
+                }
             }
             unset($it);
 
