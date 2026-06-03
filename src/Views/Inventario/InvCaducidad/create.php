@@ -13,7 +13,7 @@
     <div class="flex items-center justify-between mb-4">
         <div>
             <h1 class="text-xl font-semibold text-gray-800">Nueva caducidad</h1>
-            <p class="text-sm text-gray-500 mt-0.5">Canal, grupo, subgrupo y días de vencimiento.</p>
+            <p class="text-sm text-gray-500 mt-0.5">Canal, grupo, subgrupo, cliente (opcional), presentación y días.</p>
         </div>
         <a href="/inv-caducidad"
            class="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1 shrink-0">
@@ -33,7 +33,7 @@
             <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Canal</label>
             <select name="canal" id="sel-canal" required
                     class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white
-                           focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition">
+                           focus:outline-none focus:ring-2 focus:ring-blue-400 transition">
                 <option value="" disabled selected>Seleccionar canal…</option>
                 <?php foreach ($canales as $c): ?>
                     <option value="<?= htmlspecialchars($c['codigotc']) ?>">
@@ -48,7 +48,7 @@
             <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Grupo</label>
             <select name="codgrupo" id="sel-grupo" required
                     class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white
-                           focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition">
+                           focus:outline-none focus:ring-2 focus:ring-blue-400 transition">
                 <option value="" disabled selected>Seleccionar grupo…</option>
                 <?php foreach ($grupos as $g): ?>
                     <option value="<?= htmlspecialchars($g['codgrupo']) ?>">
@@ -58,12 +58,12 @@
             </select>
         </div>
 
-        <!-- Subgrupo (filtrado por grupo vía JS) -->
+        <!-- Subgrupo -->
         <div class="px-5 py-3">
             <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Subgrupo</label>
             <select name="codsubg" id="sel-subgrupo" required
                     class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white
-                           focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition">
+                           focus:outline-none focus:ring-2 focus:ring-blue-400 transition">
                 <option value="" disabled selected>Seleccione primero un grupo…</option>
                 <?php foreach ($subgrupos as $s): ?>
                     <option value="<?= htmlspecialchars($s['codsubg']) ?>"
@@ -74,25 +74,42 @@
             </select>
         </div>
 
+        <!-- Cliente (opcional) -->
+        <div class="px-5 py-3">
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                Cliente <span class="font-normal text-gray-400 normal-case">(opcional — vacío = aplica a todos)</span>
+            </label>
+            <select name="codc"
+                    class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white
+                           focus:outline-none focus:ring-2 focus:ring-blue-400 transition">
+                <option value="">— Genérico (todos los clientes) —</option>
+                <?php foreach ($clientes as $cl): ?>
+                    <option value="<?= htmlspecialchars($cl['codcli']) ?>">
+                        <?= htmlspecialchars($cl['codcli']) ?> — <?= htmlspecialchars($cl['razonsoc'] ?? '') ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
         <!-- Presentación -->
         <div class="px-5 py-3">
             <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Presentación</label>
             <select name="presentacion" required
                     class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white
-                           focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition">
+                           focus:outline-none focus:ring-2 focus:ring-blue-400 transition">
                 <option value="" disabled selected>Seleccionar…</option>
                 <option value="Refrigeración">Refrigeración</option>
                 <option value="Congelación">Congelación</option>
             </select>
         </div>
 
-        <!-- Cantidad (días) -->
+        <!-- Días -->
         <div class="px-5 py-3">
             <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Días de caducidad</label>
             <input type="number" name="cantidad" required min="0" max="99999"
                    placeholder="Ej. 30"
                    class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm
-                          focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent
+                          focus:outline-none focus:ring-2 focus:ring-blue-400
                           placeholder-gray-300 transition">
             <p class="text-xs text-gray-400 mt-1">Número de días antes del vencimiento.</p>
         </div>
@@ -125,6 +142,5 @@ function filtrarSubgrupos() {
         .filter(o => o.dataset.grupo === grupoVal)
         .forEach(o => selSubgrupo.appendChild(o.cloneNode(true)));
 }
-
 selGrupo.addEventListener('change', filtrarSubgrupos);
 </script>

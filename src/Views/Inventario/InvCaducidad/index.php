@@ -1,3 +1,11 @@
+<?php
+// Helper: build the 5-segment URL key for a record
+function cadUrl(array $r): string {
+    $codc = (isset($r['codc']) && trim($r['codc']) !== '') ? urlencode(trim($r['codc'])) : '_';
+    return urlencode($r['canal']) . '/' . urlencode($r['codgrupo']) . '/' . urlencode($r['codsubg'])
+         . '/' . $codc . '/' . urlencode($r['presentacion']);
+}
+?>
 <?php if (!empty($_SESSION['success'])): ?>
     <div class="mb-4 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl px-4 py-3 text-sm">
         ✔ <?= htmlspecialchars($_SESSION['success']); unset($_SESSION['success']); ?>
@@ -13,9 +21,8 @@
     </div>
 <?php endif; ?>
 
-<!-- ENCABEZADO responsive -->
+<!-- ENCABEZADO -->
 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
-
     <div class="flex items-center gap-3">
         <a href="/dashboard_home"
            class="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 shrink-0">
@@ -26,10 +33,9 @@
         </a>
         <div>
             <h1 class="text-xl font-semibold text-gray-800">Caducidad en Productos</h1>
-            <p class="text-sm text-gray-500 mt-0.5 hidden sm:block">Días de caducidad por canal, grupo y subgrupo.</p>
+            <p class="text-sm text-gray-500 mt-0.5 hidden sm:block">Días de caducidad por canal, grupo, subgrupo, cliente y presentación.</p>
         </div>
     </div>
-
     <a href="/inv-caducidad/create"
        class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700
               text-white text-sm font-semibold rounded-lg shadow-sm transition self-start sm:self-auto">
@@ -38,18 +44,18 @@
         </svg>
         Nueva caducidad
     </a>
-
 </div>
 
-<!-- TABLA con scroll horizontal en móvil -->
+<!-- TABLA -->
 <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
     <div class="overflow-x-auto">
-        <table class="w-full text-sm min-w-[640px]">
+        <table class="w-full text-sm min-w-[760px]">
             <thead>
                 <tr class="bg-gradient-to-r from-indigo-700 to-blue-600 text-white text-xs uppercase tracking-wide">
                     <th class="px-4 py-3 text-left font-semibold">Canal</th>
                     <th class="px-4 py-3 text-left font-semibold">Grupo</th>
                     <th class="px-4 py-3 text-left font-semibold">Subgrupo</th>
+                    <th class="px-4 py-3 text-left font-semibold">Cliente</th>
                     <th class="px-4 py-3 text-center font-semibold">Presentación</th>
                     <th class="px-4 py-3 text-center font-semibold">Días</th>
                     <th class="px-4 py-3 text-center font-semibold">Acciones</th>
@@ -58,26 +64,39 @@
             <tbody class="divide-y divide-gray-100">
                 <?php if (!empty($registros)): ?>
                     <?php foreach ($registros as $r): ?>
+                    <?php $url = cadUrl($r); ?>
                     <tr class="hover:bg-indigo-50 transition">
 
                         <td class="px-4 py-2.5 text-gray-700">
-                            <span class="font-semibold text-indigo-700"><?= htmlspecialchars($r['canal']) ?></span>
+                            <span class="font-semibold text-indigo-700"><?= htmlspecialchars(trim($r['canal'])) ?></span>
                             <?php if (!empty($r['canal_desc'])): ?>
                                 <span class="text-gray-400 text-xs ml-1">— <?= htmlspecialchars($r['canal_desc']) ?></span>
                             <?php endif; ?>
                         </td>
 
                         <td class="px-4 py-2.5 text-gray-700">
-                            <span class="font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded"><?= htmlspecialchars($r['codgrupo']) ?></span>
+                            <span class="font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded"><?= htmlspecialchars(trim($r['codgrupo'])) ?></span>
                             <?php if (!empty($r['grupo_desc'])): ?>
                                 <span class="ml-1 text-gray-600"><?= htmlspecialchars($r['grupo_desc']) ?></span>
                             <?php endif; ?>
                         </td>
 
                         <td class="px-4 py-2.5 text-gray-700">
-                            <span class="font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded"><?= htmlspecialchars($r['codsubg']) ?></span>
+                            <span class="font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded"><?= htmlspecialchars(trim($r['codsubg'])) ?></span>
                             <?php if (!empty($r['subgrupo_desc'])): ?>
                                 <span class="ml-1 text-gray-600"><?= htmlspecialchars($r['subgrupo_desc']) ?></span>
+                            <?php endif; ?>
+                        </td>
+
+                        <td class="px-4 py-2.5 text-gray-700">
+                            <?php $codcTrim = trim($r['codc'] ?? ''); ?>
+                            <?php if ($codcTrim !== ''): ?>
+                                <span class="font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded"><?= htmlspecialchars($codcTrim) ?></span>
+                                <?php if (!empty($r['cliente_desc'])): ?>
+                                    <span class="ml-1 text-gray-600 text-xs"><?= htmlspecialchars($r['cliente_desc']) ?></span>
+                                <?php endif; ?>
+                            <?php else: ?>
+                                <span class="text-gray-400 text-xs italic">Genérico</span>
                             <?php endif; ?>
                         </td>
 
@@ -94,26 +113,19 @@
 
                         <td class="px-4 py-2.5 text-center">
                             <div class="flex items-center justify-center gap-3">
+                                <a href="/inv-caducidad/<?= $url ?>"
+                                   class="text-gray-500 hover:text-gray-700 font-medium text-xs hover:underline">Ver</a>
 
-                                <a href="/inv-caducidad/<?= urlencode($r['canal']) ?>/<?= urlencode($r['codgrupo']) ?>/<?= urlencode($r['codsubg']) ?>"
-                                   class="text-gray-500 hover:text-gray-700 font-medium text-xs hover:underline">
-                                    Ver
-                                </a>
+                                <a href="/inv-caducidad/<?= $url ?>/edit"
+                                   class="text-indigo-600 hover:text-indigo-800 font-medium text-xs hover:underline">Editar</a>
 
-                                <a href="/inv-caducidad/<?= urlencode($r['canal']) ?>/<?= urlencode($r['codgrupo']) ?>/<?= urlencode($r['codsubg']) ?>/edit"
-                                   class="text-indigo-600 hover:text-indigo-800 font-medium text-xs hover:underline">
-                                    Editar
-                                </a>
-
-                                <form method="POST"
-                                      action="/inv-caducidad/<?= urlencode($r['canal']) ?>/<?= urlencode($r['codgrupo']) ?>/<?= urlencode($r['codsubg']) ?>/delete"
+                                <form method="POST" action="/inv-caducidad/<?= $url ?>/delete"
                                       onsubmit="return confirm('¿Eliminar este registro de caducidad?')">
                                     <button type="submit"
                                             class="text-red-500 hover:text-red-700 font-medium text-xs hover:underline">
                                         Eliminar
                                     </button>
                                 </form>
-
                             </div>
                         </td>
 
@@ -121,7 +133,7 @@
                     <?php endforeach; ?>
                 <?php else: ?>
                     <tr>
-                        <td colspan="6" class="px-6 py-10 text-center text-gray-400 text-sm">
+                        <td colspan="7" class="px-6 py-10 text-center text-gray-400 text-sm">
                             No hay registros de caducidad.
                             <a href="/inv-caducidad/create" class="text-indigo-600 hover:underline">Crear el primero</a>.
                         </td>

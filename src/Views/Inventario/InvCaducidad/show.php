@@ -1,13 +1,19 @@
+<?php
+function cadUrlShow(array $r): string {
+    $codc = (isset($r['codc']) && trim($r['codc']) !== '') ? urlencode(trim($r['codc'])) : '_';
+    return urlencode(trim($r['canal'])) . '/' . urlencode(trim($r['codgrupo'])) . '/' . urlencode(trim($r['codsubg']))
+         . '/' . $codc . '/' . urlencode(trim($r['presentacion']));
+}
+?>
 <div class="max-w-lg mx-auto mt-6">
 
-    <!-- ENCABEZADO -->
     <div class="flex items-center justify-between mb-6">
         <div>
             <h1 class="text-xl font-semibold text-gray-800">Detalle de caducidad</h1>
             <p class="text-sm text-gray-500 mt-0.5">Información completa del registro.</p>
         </div>
         <div class="flex items-center gap-3">
-            <a href="/inv-caducidad/<?= urlencode($registro['canal']) ?>/<?= urlencode($registro['codgrupo']) ?>/<?= urlencode($registro['codsubg']) ?>/edit"
+            <a href="/inv-caducidad/<?= cadUrlShow($registro) ?>/edit"
                class="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700
                       text-white text-sm font-semibold rounded-lg shadow-sm transition">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -27,16 +33,13 @@
         </div>
     </div>
 
-    <!-- TARJETA DETALLE -->
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 divide-y divide-gray-50">
 
         <!-- Canal -->
         <div class="px-6 py-5 flex items-start justify-between">
             <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Canal</span>
             <div class="text-right">
-                <span class="font-semibold text-indigo-700 text-sm">
-                    <?= htmlspecialchars($registro['canal']) ?>
-                </span>
+                <span class="font-semibold text-indigo-700 text-sm"><?= htmlspecialchars(trim($registro['canal'])) ?></span>
                 <?php if (!empty($registro['canal_desc'])): ?>
                     <p class="text-xs text-gray-500 mt-0.5"><?= htmlspecialchars($registro['canal_desc']) ?></p>
                 <?php endif; ?>
@@ -47,9 +50,7 @@
         <div class="px-6 py-5 flex items-start justify-between">
             <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Grupo</span>
             <div class="text-right">
-                <span class="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-700">
-                    <?= htmlspecialchars($registro['codgrupo']) ?>
-                </span>
+                <span class="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-700"><?= htmlspecialchars(trim($registro['codgrupo'])) ?></span>
                 <?php if (!empty($registro['grupo_desc'])): ?>
                     <p class="text-xs text-gray-500 mt-0.5"><?= htmlspecialchars($registro['grupo_desc']) ?></p>
                 <?php endif; ?>
@@ -60,11 +61,25 @@
         <div class="px-6 py-5 flex items-start justify-between">
             <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Subgrupo</span>
             <div class="text-right">
-                <span class="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-700">
-                    <?= htmlspecialchars($registro['codsubg']) ?>
-                </span>
+                <span class="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-700"><?= htmlspecialchars(trim($registro['codsubg'])) ?></span>
                 <?php if (!empty($registro['subgrupo_desc'])): ?>
                     <p class="text-xs text-gray-500 mt-0.5"><?= htmlspecialchars($registro['subgrupo_desc']) ?></p>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Cliente -->
+        <div class="px-6 py-5 flex items-start justify-between">
+            <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Cliente</span>
+            <div class="text-right">
+                <?php $codcTrim = trim($registro['codc'] ?? ''); ?>
+                <?php if ($codcTrim !== ''): ?>
+                    <span class="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-700"><?= htmlspecialchars($codcTrim) ?></span>
+                    <?php if (!empty($registro['cliente_desc'])): ?>
+                        <p class="text-xs text-gray-500 mt-0.5"><?= htmlspecialchars($registro['cliente_desc']) ?></p>
+                    <?php endif; ?>
+                <?php else: ?>
+                    <span class="text-gray-400 text-xs italic">Genérico (todos los clientes)</span>
                 <?php endif; ?>
             </div>
         </div>
@@ -72,17 +87,13 @@
         <!-- Presentación -->
         <div class="px-6 py-5 flex items-center justify-between">
             <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Presentación</span>
-            <?php
-            $badgeClass = ($registro['presentacion'] ?? '') === 'Refrigeración'
-                ? 'bg-blue-100 text-blue-700'
-                : 'bg-cyan-100 text-cyan-700';
-            ?>
+            <?php $badgeClass = ($registro['presentacion'] ?? '') === 'Refrigeración' ? 'bg-blue-100 text-blue-700' : 'bg-cyan-100 text-cyan-700'; ?>
             <span class="<?= $badgeClass ?> text-xs font-semibold px-3 py-1 rounded-full">
                 <?= htmlspecialchars($registro['presentacion'] ?? '—') ?>
             </span>
         </div>
 
-        <!-- Cantidad -->
+        <!-- Días -->
         <div class="px-6 py-5 flex items-center justify-between">
             <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Días de caducidad</span>
             <span class="text-2xl font-bold text-gray-800">
@@ -95,8 +106,7 @@
 
     <!-- Eliminar -->
     <div class="mt-6 flex justify-end">
-        <form method="POST"
-              action="/inv-caducidad/<?= urlencode($registro['canal']) ?>/<?= urlencode($registro['codgrupo']) ?>/<?= urlencode($registro['codsubg']) ?>/delete"
+        <form method="POST" action="/inv-caducidad/<?= cadUrlShow($registro) ?>/delete"
               onsubmit="return confirm('¿Confirma la eliminación de este registro?')">
             <button type="submit"
                     class="inline-flex items-center gap-2 px-4 py-2 text-sm text-red-600 border border-red-200

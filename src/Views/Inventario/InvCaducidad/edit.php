@@ -1,3 +1,10 @@
+<?php
+function cadUrlEdit(array $r): string {
+    $codc = (isset($r['codc']) && trim($r['codc']) !== '') ? urlencode(trim($r['codc'])) : '_';
+    return urlencode(trim($r['canal'])) . '/' . urlencode(trim($r['codgrupo'])) . '/' . urlencode(trim($r['codsubg']))
+         . '/' . $codc . '/' . urlencode(trim($r['presentacion']));
+}
+?>
 <?php if (!empty($_SESSION['errors'])): ?>
     <div class="mb-4 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">
         <?php foreach ($_SESSION['errors'] as $e): ?>
@@ -9,14 +16,11 @@
 
 <div class="max-w-lg mx-auto mt-6">
 
-    <!-- ENCABEZADO -->
     <div class="flex items-center justify-between mb-6">
         <div>
             <h1 class="text-xl font-semibold text-gray-800">Editar caducidad</h1>
             <p class="text-sm text-gray-500 mt-0.5">
-                Canal <strong><?= htmlspecialchars($registro['canal']) ?></strong>
-                · Grupo <strong><?= htmlspecialchars($registro['codgrupo']) ?></strong>
-                · Subgrupo <strong><?= htmlspecialchars($registro['codsubg']) ?></strong>
+                Solo se pueden modificar los días de caducidad.
             </p>
         </div>
         <a href="/inv-caducidad"
@@ -29,66 +33,53 @@
     </div>
 
     <form method="POST"
-          action="/inv-caducidad/<?= urlencode($registro['canal']) ?>/<?= urlencode($registro['codgrupo']) ?>/<?= urlencode($registro['codsubg']) ?>/update"
+          action="/inv-caducidad/<?= cadUrlEdit($registro) ?>/update"
           class="bg-white rounded-2xl shadow-sm border border-gray-100 divide-y divide-gray-50">
 
         <!-- Canal (solo lectura) -->
-        <div class="px-6 py-5">
-            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                Canal
-            </label>
-            <input type="text" readonly
-                   value="<?= htmlspecialchars($registro['canal']) ?>"
-                   class="w-full border border-gray-100 bg-gray-50 rounded-lg px-3 py-2.5 text-sm text-gray-500 cursor-not-allowed">
-            <p class="text-xs text-gray-400 mt-1">La clave primaria no puede modificarse.</p>
+        <div class="px-6 py-4">
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Canal</label>
+            <input type="text" readonly value="<?= htmlspecialchars(trim($registro['canal'])) ?>"
+                   class="w-full border border-gray-100 bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-500 cursor-not-allowed">
         </div>
 
         <!-- Grupo (solo lectura) -->
-        <div class="px-6 py-5">
-            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                Grupo
-            </label>
-            <input type="text" readonly
-                   value="<?= htmlspecialchars($registro['codgrupo']) ?>"
-                   class="w-full border border-gray-100 bg-gray-50 rounded-lg px-3 py-2.5 text-sm text-gray-500 cursor-not-allowed">
+        <div class="px-6 py-4">
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Grupo</label>
+            <input type="text" readonly value="<?= htmlspecialchars(trim($registro['codgrupo'])) ?>"
+                   class="w-full border border-gray-100 bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-500 cursor-not-allowed">
         </div>
 
         <!-- Subgrupo (solo lectura) -->
-        <div class="px-6 py-5">
-            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                Subgrupo
-            </label>
+        <div class="px-6 py-4">
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Subgrupo</label>
+            <input type="text" readonly value="<?= htmlspecialchars(trim($registro['codsubg'])) ?>"
+                   class="w-full border border-gray-100 bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-500 cursor-not-allowed">
+        </div>
+
+        <!-- Cliente (solo lectura) -->
+        <div class="px-6 py-4">
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Cliente</label>
+            <?php $codcTrim = trim($registro['codc'] ?? ''); ?>
             <input type="text" readonly
-                   value="<?= htmlspecialchars($registro['codsubg']) ?>"
-                   class="w-full border border-gray-100 bg-gray-50 rounded-lg px-3 py-2.5 text-sm text-gray-500 cursor-not-allowed">
+                   value="<?= $codcTrim !== '' ? htmlspecialchars($codcTrim . (!empty($registro['cliente_desc']) ? ' — ' . $registro['cliente_desc'] : '')) : 'Genérico (todos los clientes)' ?>"
+                   class="w-full border border-gray-100 bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-500 cursor-not-allowed">
         </div>
 
-        <!-- Presentación -->
-        <div class="px-6 py-5">
-            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                Presentación
-            </label>
-            <select name="presentacion" required
-                    class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white
-                           focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition">
-                <?php foreach (['Refrigeración', 'Congelación'] as $opt): ?>
-                    <option value="<?= $opt ?>"
-                            <?= ($registro['presentacion'] ?? '') === $opt ? 'selected' : '' ?>>
-                        <?= $opt ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
+        <!-- Presentación (solo lectura) -->
+        <div class="px-6 py-4">
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Presentación</label>
+            <input type="text" readonly value="<?= htmlspecialchars($registro['presentacion'] ?? '') ?>"
+                   class="w-full border border-gray-100 bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-500 cursor-not-allowed">
         </div>
 
-        <!-- Cantidad -->
-        <div class="px-6 py-5">
-            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                Días de caducidad
-            </label>
+        <!-- Días (editable) -->
+        <div class="px-6 py-4">
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Días de caducidad</label>
             <input type="number" name="cantidad" required min="0" max="99999"
                    value="<?= (int)($registro['cantidad'] ?? 0) ?>"
-                   class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm
-                          focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition">
+                   class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm
+                          focus:outline-none focus:ring-2 focus:ring-blue-400 transition">
         </div>
 
         <!-- Botones -->

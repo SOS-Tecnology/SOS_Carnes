@@ -233,15 +233,16 @@ class PlanillaPedidosController
         try {
             $this->db->pdo->beginTransaction();
 
+            // 1. Leer ítem — sin TRIM en columnas indexadas
             $itStmt = $this->db->pdo->prepare("
                 SELECT TRIM(cm.codr)    AS codr,
                        TRIM(cm.descr)   AS descr,
                        TRIM(cm.prefijo) AS prefijo,
                        cm.cantidad      AS cantidadPedida
                 FROM cuerpomov cm
-                WHERE TRIM(cm.tm)        = 'PV'
-                  AND TRIM(cm.documento) = :doc
-                  AND TRIM(cm.registro)  = :registro
+                WHERE cm.tm        = 'PV'
+                  AND cm.documento = :doc
+                  AND cm.registro  = :registro
                 LIMIT 1
             ");
             $itStmt->execute([':doc' => $nrodoc, ':registro' => $registro]);
@@ -252,50 +253,69 @@ class PlanillaPedidosController
                 return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
             }
 
+            // 2. Siguiente itemre — sin TRIM en columnas indexadas
             $nrStmt = $this->db->pdo->prepare("
                 SELECT COALESCE(MAX(CAST(itemre AS UNSIGNED)), 0) + 1
                 FROM itemmov
-                WHERE TRIM(tm) = 'PV' AND TRIM(prefijo) = :prefijo
-                  AND TRIM(documento) = :doc AND TRIM(registro) = :registro
+                WHERE tm        = 'PV'
+                  AND prefijo   = :prefijo
+                  AND documento = :doc
+                  AND registro  = :registro
             ");
             $nrStmt->execute([':prefijo' => $item['prefijo'], ':doc' => $nrodoc, ':registro' => $registro]);
             $newItemre = (string)($nrStmt->fetchColumn() ?: 1);
 
             $hora = date('H:i:s');
 
+            // 3. INSERT — sin TRIM en columnas indexadas
             $this->db->pdo->prepare("
                 INSERT INTO itemmov (tm, prefijo, documento, codr, descr, cantidad, lote, registro, itemre, temp, hora, presentacion)
                 VALUES ('PV', :prefijo, :doc, :codr, :descr, :cantidad, :lote, :registro, :itemre, :temp, :hora, :presentacion)
             ")->execute([
-                ':prefijo'      => trim($item['prefijo']),
-                ':doc'          => trim($nrodoc),
-                ':codr'         => trim($item['codr']),
-                ':descr'        => trim($item['descr']),
+                ':prefijo'      => $item['prefijo'],
+                ':doc'          => $nrodoc,
+                ':codr'         => $item['codr'],
+                ':descr'        => $item['descr'],
                 ':cantidad'     => $cantidad,
                 ':lote'         => $lote,
-                ':registro'     => trim($registro),
+                ':registro'     => $registro,
                 ':itemre'       => $newItemre,
                 ':temp'         => $temp,
                 ':hora'         => $hora,
                 ':presentacion' => $presentacion,
             ]);
 
-            $this->recalcCantent(trim($nrodoc), trim($item['prefijo']), trim($item['codr']), trim($registro));
+            // 4. Incremento directo en cuerpomov — reemplaza el SUM() + UPDATE separado
+            $this->db->pdo->prepare("
+                UPDATE cuerpomov
+                SET cantent = cantent + :nueva_cantidad
+                WHERE tm        = 'PV'
+                  AND prefijo   = :prefijo
+                  AND documento = :doc
+                  AND registro  = :registro
+            ")->execute([
+                ':nueva_cantidad' => $cantidad,
+                ':prefijo'        => $item['prefijo'],
+                ':doc'            => $nrodoc,
+                ':registro'       => $registro,
+            ]);
 
             $this->db->pdo->commit();
 
-            // Leer cantent actualizado
+            // 5. Leer cantent actualizado — sin TRIM
             $ce = $this->db->pdo->prepare("
                 SELECT cantent FROM cuerpomov
-                WHERE TRIM(tm) = 'PV' AND TRIM(prefijo) = :prefijo
-                  AND TRIM(documento) = :doc AND TRIM(registro) = :registro
+                WHERE tm        = 'PV'
+                  AND prefijo   = :prefijo
+                  AND documento = :doc
+                  AND registro  = :registro
                 LIMIT 1
             ");
-            $ce->execute([':prefijo' => trim($item['prefijo']), ':doc' => $nrodoc, ':registro' => $registro]);
+            $ce->execute([':prefijo' => $item['prefijo'], ':doc' => $nrodoc, ':registro' => $registro]);
             $cantent = (float)($ce->fetchColumn() ?: 0);
 
-            // Leer todos los lotes actualizados
-            $lotes = $this->getItemmovEntries($nrodoc, trim($item['prefijo']), trim($item['codr']), $registro);
+            // 6. Leer lotes — sin TRIM en columnas indexadas
+            $lotes = $this->getItemmovEntries($nrodoc, $item['prefijo'], $item['codr'], $registro);
 
             $response->getBody()->write(json_encode([
                 'ok'           => true,
@@ -379,11 +399,11 @@ class PlanillaPedidosController
         $sumStmt = $this->db->pdo->prepare("
             SELECT COALESCE(SUM(cantidad), 0)
             FROM itemmov
-            WHERE TRIM(tm)        = 'PV'
-              AND TRIM(prefijo)   = :prefijo
-              AND TRIM(documento) = :doc
-              AND TRIM(codr)      = :codr
-              AND TRIM(registro)  = :registro
+            WHERE tm        = 'PV'
+              AND prefijo   = :prefijo
+              AND documento = :doc
+              AND codr      = :codr
+              AND registro  = :registro
         ");
         $sumStmt->execute([
             ':prefijo'  => $pvPrefijo,
@@ -395,11 +415,11 @@ class PlanillaPedidosController
 
         $this->db->pdo->prepare("
             UPDATE cuerpomov SET cantent = :total
-            WHERE TRIM(tm)        = 'PV'
-              AND TRIM(prefijo)   = :prefijo
-              AND TRIM(documento) = :doc
-              AND TRIM(codr)      = :codr
-              AND TRIM(registro)  = :registro
+            WHERE tm        = 'PV'
+              AND prefijo   = :prefijo
+              AND documento = :doc
+              AND codr      = :codr
+              AND registro  = :registro
         ")->execute([
             ':total'    => $total,
             ':prefijo'  => $pvPrefijo,
@@ -433,11 +453,11 @@ class PlanillaPedidosController
         $stmt = $this->db->pdo->prepare("
             SELECT i.hora, i.lote, i.temp, i.cantidad, i.presentacion
             FROM itemmov i
-            WHERE TRIM(i.tm)        = 'PV'
-              AND TRIM(i.prefijo)   = :prefijo
-              AND TRIM(i.documento) = :doc
-              AND TRIM(i.codr)      = :codr
-              AND TRIM(i.registro)  = :registro
+            WHERE i.tm        = 'PV'
+              AND i.prefijo   = :prefijo
+              AND i.documento = :doc
+              AND i.codr      = :codr
+              AND i.registro  = :registro
             ORDER BY i.hora
         ");
         $stmt->execute([

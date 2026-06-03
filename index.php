@@ -45,6 +45,12 @@ error_reporting(E_ALL);
 // ── Helper renderView ────────────────────────────────────
 function renderView($response, $viewPath, $title, $data = [])
 {
+    // Evitar que el navegador cachee páginas del dashboard (bfcache / back-forward cache)
+    $response = $response
+        ->withHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        ->withHeader('Pragma', 'no-cache')
+        ->withHeader('Expires', '0');
+
     extract($data);
     ob_start();
     include $viewPath;
@@ -359,22 +365,22 @@ $app->group('', function ($group) {
         return $ctrl->store($request, $response);
     });
 
-    $group->get('/inv-caducidad/{canal}/{codgrupo}/{codsubg}', function ($request, $response, $args) {
+    $group->get('/inv-caducidad/{canal}/{codgrupo}/{codsubg}/{codc}/{presentacion}', function ($request, $response, $args) {
         $ctrl = new InvCaducidadController($GLOBALS['db']);
         return $ctrl->show($request, $response, $args);
     });
 
-    $group->get('/inv-caducidad/{canal}/{codgrupo}/{codsubg}/edit', function ($request, $response, $args) {
+    $group->get('/inv-caducidad/{canal}/{codgrupo}/{codsubg}/{codc}/{presentacion}/edit', function ($request, $response, $args) {
         $ctrl = new InvCaducidadController($GLOBALS['db']);
         return $ctrl->edit($request, $response, $args);
     });
 
-    $group->post('/inv-caducidad/{canal}/{codgrupo}/{codsubg}/update', function ($request, $response, $args) {
+    $group->post('/inv-caducidad/{canal}/{codgrupo}/{codsubg}/{codc}/{presentacion}/update', function ($request, $response, $args) {
         $ctrl = new InvCaducidadController($GLOBALS['db']);
         return $ctrl->update($request, $response, $args);
     });
 
-    $group->post('/inv-caducidad/{canal}/{codgrupo}/{codsubg}/delete', function ($request, $response, $args) {
+    $group->post('/inv-caducidad/{canal}/{codgrupo}/{codsubg}/{codc}/{presentacion}/delete', function ($request, $response, $args) {
         $ctrl = new InvCaducidadController($GLOBALS['db']);
         return $ctrl->delete($request, $response, $args);
     });
