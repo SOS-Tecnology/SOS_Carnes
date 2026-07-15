@@ -252,6 +252,22 @@
     </footer>
 
     <script>
+        /* ── Prevención global: Enter en inputs numéricos no envía el form ── */
+        document.addEventListener('keydown', function (e) {
+            if (e.key !== 'Enter') return;
+            const el = e.target;
+            if (
+                el.tagName === 'INPUT' &&
+                (el.type === 'number' || el.classList.contains('peso-input') ||
+                 el.inputMode === 'decimal' || el.inputMode === 'numeric')
+            ) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        }, true); /* captura = true para interceptar antes del submit nativo */
+    </script>
+
+    <script>
         const sidebar = document.getElementById('sidebar');
         const savedSidebar = localStorage.getItem('sidebarCollapsed');
         // Tablets (≤1024px) colapsan por defecto en la primera visita

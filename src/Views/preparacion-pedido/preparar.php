@@ -480,14 +480,14 @@ if (isset($_SESSION['errors'])) {
                         </div>
                         <div class="peso-group">
                             <label for="peso_<?= $globalIdx ?>">Peso definitivo (kg)</label>
-                            <input type="number"
+                            <input type="text"
+                                   inputmode="decimal"
                                    id="peso_<?= $globalIdx ?>"
                                    name="pesos[]"
                                    class="peso-input"
-                                   step="0.001" min="0"
+                                   data-solicitado="<?= number_format($solicitado, 3, '.', '') ?>"
                                    value="<?= $propuesta ?>"
                                    autocomplete="off"
-                                   onfocus="this.select()"
                                    required>
                         </div>
                         <button type="button"
@@ -685,6 +685,53 @@ if (isset($_SESSION['errors'])) {
     }
 
     document.addEventListener('DOMContentLoaded', () => {
+
+        // ── Inicializar campos de peso ──────────────────────────────
+        document.querySelectorAll('.peso-input').forEach(inp => {
+
+            // Foco: seleccionar todo el contenido
+            inp.addEventListener('focus', function () {
+                setTimeout(() => this.select(), 10);
+            });
+
+            // Doble click: cargar el valor solicitado
+            inp.addEventListener('dblclick', function () {
+                this.value = this.dataset.solicitado || '0.000';
+                setTimeout(() => this.select(), 10);
+            });
+
+            // Enter: no enviar el formulario; avanzar al siguiente campo
+            inp.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const all = [...document.querySelectorAll('.peso-input')];
+                    const i   = all.indexOf(this);
+                    if (i >= 0 && i < all.length - 1) {
+                        all[i + 1].focus();
+                    }
+                }
+            });
+
+            // Input: filtrar solo dígitos y un punto decimal
+            inp.addEventListener('input', function () {
+                let v = this.value.replace(/[^0-9.]/g, '');
+                // Permitir solo un punto decimal
+                const partes = v.split('.');
+                if (partes.length > 2) v = partes[0] + '.' + partes.slice(1).join('');
+                this.value = v;
+            });
+
+            // Blur: normalizar formato (0.xxx)
+            inp.addEventListener('blur', function () {
+                let v = this.value.trim();
+                if (v === '' || v === '.') { this.value = '0.000'; return; }
+                if (v.startsWith('.')) v = '0' + v;  // .78 → 0.78
+                const n = parseFloat(v);
+                this.value = isNaN(n) ? '0.000' : n.toFixed(3);
+            });
+        });
+
         const first = document.querySelector('.peso-input');
         if (first) first.focus();
 
