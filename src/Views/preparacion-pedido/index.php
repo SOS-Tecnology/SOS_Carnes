@@ -4,7 +4,7 @@ $nrodocFmt = fn(string $n): string => str_pad($n, 8, '0', STR_PAD_LEFT);
 // Agrupar pedidos por cliente
 $pedidosPorCliente = [];
 foreach ($pedidos as $p) {
-    $key = $p['codtipocli'] . '||' . $p['nomcli'];
+    $key = $p['codtipocli'] . '||' . trim($p['codcli'] ?? '') . '||' . $p['nomcli'];
     $pedidosPorCliente[$key][] = $p;
 }
 ?>
@@ -146,6 +146,37 @@ foreach ($pedidos as $p) {
     .btn-integrar:hover { background: #166534; transform: translateY(-1px); }
     .btn-integrar:disabled { background: #9ca3af; cursor: not-allowed; transform: none; }
     .sel-counter { font-size: .74rem; color: #4b5563; font-weight: 600; }
+    .pp2-filtros {
+        background: #fff;
+        border: 1px solid #d0d8ec;
+        border-radius: .5rem;
+        padding: .6rem .9rem;
+        margin-bottom: .9rem;
+        display: flex;
+        align-items: flex-end;
+        gap: .9rem;
+        flex-wrap: wrap;
+        box-shadow: 0 2px 8px rgba(0,0,0,.06);
+    }
+    .filtro-campo { display: flex; flex-direction: column; gap: .2rem; }
+    .filtro-campo label {
+        font-size: .7rem; font-weight: 700; color: #1a4dad;
+        letter-spacing: .02em; text-transform: uppercase;
+    }
+    .filtro-campo input {
+        border: 1px solid #c3cde6; border-radius: .35rem;
+        padding: .38rem .6rem; font-size: .82rem; color: #222;
+        outline: none; min-width: 150px;
+    }
+    .filtro-campo input:focus { border-color: #1a4dad; box-shadow: 0 0 0 2px rgba(26,77,173,.12); }
+    .filtro-cliente input { min-width: 260px; }
+    .btn-limpiar {
+        background: #e5e7eb; border: 1px solid #c9cdd4; border-radius: .35rem;
+        padding: .38rem .8rem; font-size: .78rem; font-weight: 600;
+        color: #374151; cursor: pointer;
+    }
+    .btn-limpiar:hover { background: #d7dae0; }
+    .filtro-info { font-size: .74rem; color: #4b5563; font-weight: 600; margin-left: auto; }
     .pp2-empty {
         text-align: center; color: #888; font-size: .85rem; padding: 2rem 0;
     }
@@ -213,12 +244,40 @@ foreach ($pedidos as $p) {
             <div class="pp2-empty">No hay pedidos listos para preparar.</div>
         <?php else: ?>
 
+            <div class="pp2-filtros">
+                <div class="filtro-campo">
+                    <label for="filtro-pv">N&deg; Pedido PV</label>
+                    <input type="text" id="filtro-pv" inputmode="numeric" autocomplete="off"
+                           placeholder="Ej. 3929" oninput="aplicarFiltros()">
+                </div>
+                <div class="filtro-campo filtro-cliente">
+                    <label for="filtro-cliente">Cliente (nombre o c&oacute;digo)</label>
+                    <input type="text" id="filtro-cliente" list="lista-clientes" autocomplete="off"
+                           placeholder="Escriba el nombre del cliente..." oninput="aplicarFiltros()">
+                    <datalist id="lista-clientes">
+                        <?php foreach ($pedidosPorCliente as $key => $grupo):
+                            [, $codcliDl, $nomcliDl] = explode('||', $key, 3);
+                        ?>
+                            <option value="<?= htmlspecialchars($nomcliDl) ?> (<?= htmlspecialchars($codcliDl) ?>)"></option>
+                        <?php endforeach; ?>
+                    </datalist>
+                </div>
+                <button type="button" class="btn-limpiar" onclick="limpiarFiltros()">Limpiar</button>
+                <span class="filtro-info" id="filtro-info"></span>
+            </div>
+
+            <div class="pp2-empty" id="filtro-sin-resultados" style="display:none;">
+                Ning&uacute;n pedido coincide con los filtros aplicados.
+            </div>
+
             <?php foreach ($pedidosPorCliente as $key => $grupo):
-                [$canal, $nomcli] = explode('||', $key, 2);
+                [$canal, $codcliGrp, $nomcli] = explode('||', $key, 3);
                 $esMulti = count($grupo) > 1;
                 $bloqueId = 'bloque_' . md5($key);
             ?>
-            <div class="cliente-bloque">
+            <div class="cliente-bloque"
+                 data-codcli="<?= htmlspecialchars($codcliGrp) ?>"
+                 data-nomcli="<?= htmlspecialchars($nomcli) ?>">
                 <div class="cliente-header">
                     <span class="cliente-nombre"><?= htmlspecialchars($nomcli) ?></span>
                     <span class="cliente-canal"><?= htmlspecialchars($canal) ?></span>
@@ -250,7 +309,7 @@ foreach ($pedidos as $p) {
                         <?php foreach ($grupo as $p):
                             $enProceso = !empty($p['en_proceso']);
                         ?>
-                        <tr>
+                        <tr data-doc="<?= htmlspecialchars($nrodocFmt($p['nrodoc'])) ?>">
                             <td class="center">
                                 <?php if ($esMulti): ?>
                                     <input type="checkbox"
@@ -405,4 +464,65 @@ foreach ($pedidos as $p) {
     document.getElementById('modal-integrar').addEventListener('click', function(e) {
         if (e.target === this) cerrarModalIntegrar();
     });
+
+    // ── Filtros por N° PV y por cliente ─────────────────────────────────
+    function aplicarFiltros() {
+        const inpPv  = document.getElementById('filtro-pv');
+        const inpCli = document.getElementById('filtro-cliente');
+        if (!inpPv || !inpCli) return;
+
+        const pv     = inpPv.value.replace(/\D/g, '').replace(/^0+/, '');
+        const cliRaw = inpCli.value.trim().toUpperCase();
+
+        // Si el valor viene del datalist "NOMBRE (CODIGO)", extraer el código
+        const m         = cliRaw.match(/\(([^)]+)\)\s*$/);
+        const cliCod    = m ? m[1].trim() : '';
+        const cliNombre = m ? cliRaw.replace(/\s*\([^)]*\)\s*$/, '').trim() : cliRaw;
+
+        let totalVisibles = 0;
+
+        document.querySelectorAll('.cliente-bloque').forEach(bloque => {
+            const cod = (bloque.dataset.codcli || '').toUpperCase();
+            const nom = (bloque.dataset.nomcli || '').toUpperCase();
+
+            const cliOk = cliRaw === '' ||
+                (cliCod !== '' ? cod === cliCod
+                               : (nom.includes(cliNombre) || cod.includes(cliNombre)));
+
+            let filasVisibles = 0;
+            bloque.querySelectorAll('tbody tr').forEach(tr => {
+                const doc   = (tr.dataset.doc || '').replace(/^0+/, '');
+                const docOk = pv === '' || doc.includes(pv);
+                const show  = cliOk && docOk;
+                tr.style.display = show ? '' : 'none';
+                if (!show) {
+                    // Deseleccionar pedidos ocultos para no integrarlos por error
+                    const cb = tr.querySelector('input.cb-pedido');
+                    if (cb && cb.checked) {
+                        cb.checked = false;
+                        cb.dispatchEvent(new Event('change'));
+                    }
+                }
+                if (show) filasVisibles++;
+            });
+            bloque.style.display = filasVisibles > 0 ? '' : 'none';
+            totalVisibles += filasVisibles;
+        });
+
+        const sinRes = document.getElementById('filtro-sin-resultados');
+        if (sinRes) sinRes.style.display = totalVisibles === 0 ? '' : 'none';
+
+        const info = document.getElementById('filtro-info');
+        if (info) {
+            info.textContent = (pv !== '' || cliRaw !== '')
+                ? totalVisibles + ' pedido(s) encontrado(s)'
+                : '';
+        }
+    }
+
+    function limpiarFiltros() {
+        document.getElementById('filtro-pv').value = '';
+        document.getElementById('filtro-cliente').value = '';
+        aplicarFiltros();
+    }
 </script>

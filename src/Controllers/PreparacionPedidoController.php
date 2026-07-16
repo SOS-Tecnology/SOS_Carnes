@@ -24,6 +24,7 @@ class PreparacionPedidoController
             SELECT TRIM(c.documento)                          AS nrodoc,
                    TRIM(c.prefijo)                            AS prefijo,
                    DATE_FORMAT(c.fechent, '%d/%m/%Y')         AS fecentrega_fmt,
+                   TRIM(g.codcli)                             AS codcli,
                    TRIM(g.nombrecli)                          AS nomcli,
                    TRIM(g.codtipocli)                         AS codtipocli
             FROM   cabezamov c
@@ -211,6 +212,19 @@ class PreparacionPedidoController
         }
 
         // ── Ítems: uno o varios pedidos ───────────────────────────────────
+        // Canal del usuario activo (sesión) para inv_caducidad
+        if (!isset($_SESSION['user']['codtipocli'])) {
+            $u = $this->db->get('users', ['tipocliente'], ['id' => $_SESSION['user']['id']]);
+            $_SESSION['user']['codtipocli'] = trim($u['tipocliente'] ?? '');
+        }
+        $canal  = trim($_SESSION['user']['codtipocli'] ?? '');
+        $codcli = trim($pedidoBase['codcp'] ?? '');
+
+        $presEnumMap = [
+            1 => 'Refrigeración',
+            2 => 'Congelación',
+        ];
+
         $items = [];
         foreach ($docs as $i => $doc) {
             $pref = $prefs[$i] ?? $pedidoBase['prefijo'];
@@ -253,108 +267,139 @@ class PreparacionPedidoController
             $itemsStmt->execute([':prefijo' => $pref, ':doc' => $doc]);
             $docItems = $itemsStmt->fetchAll(\PDO::FETCH_ASSOC);
 
-            // Cargar lotes de itemmov para cada ítem
+            // ── Lotes de itemmov de todo el documento (una sola consulta) ──
+            $lotesStmt = $this->db->pdo->prepare("
+                SELECT TRIM(i.registro)  AS registro,
+                       TRIM(i.lote)      AS lote,
+                       i.cantidad,
+                       i.presentacion
+                FROM   itemmov i
+                WHERE  TRIM(i.tm)        = 'PV'
+                  AND  TRIM(i.prefijo)   = :prefijo
+                  AND  TRIM(i.documento) = :doc
+                ORDER  BY i.hora ASC
+            ");
+            $lotesStmt->execute([':prefijo' => $pref, ':doc' => $doc]);
+            $lotesPorRegistro = [];
+            foreach ($lotesStmt->fetchAll(\PDO::FETCH_ASSOC) as $l) {
+                $lotesPorRegistro[$l['registro']][] = $l;
+            }
+
             foreach ($docItems as &$it) {
-                $lotesStmt = $this->db->pdo->prepare("
-                    SELECT TRIM(i.registro)  AS registro,
-                           TRIM(i.lote)      AS lote,
-                           i.cantidad,
-                           i.presentacion
-                    FROM   itemmov i
-                    WHERE  TRIM(i.tm)        = 'PV'
-                      AND  TRIM(i.prefijo)   = :prefijo
-                      AND  TRIM(i.documento) = :doc
-                      AND  TRIM(i.registro)  = :reg
-                    ORDER  BY i.hora ASC
-                ");
-                $lotesStmt->execute([
-                    ':prefijo' => $pref,
-                    ':doc'     => $doc,
-                    ':reg'     => trim($it['registro'])
-                ]);
-                $lotes = $lotesStmt->fetchAll(\PDO::FETCH_ASSOC);
+                $lotes = $lotesPorRegistro[trim($it['registro'])] ?? [];
                 $it['lotes'] = $lotes;
 
                 // ── Presentación del ítem: valor del último lote registrado ──
                 $lastLote = !empty($lotes) ? end($lotes) : null;
                 $presInt  = (int)($lastLote['presentacion'] ?? 1);
-                // Mapeo entero → valor exacto del enum en inv_caducidad
-                $presEnumMap = [
-                    1 => 'Refrigeración',
-                    2 => 'Congelación',
-                ];
                 $it['presentacion_label'] = $presEnumMap[$presInt] ?? 'Refrigeración';
                 $it['presentacion_int']   = $presInt;
 
-                // ── Días de vencimiento desde inv_caducidad ──────────────────
-                // Obtener codgrupo/codsubg del artículo desde inrefinv
-                $refStmt = $this->db->pdo->prepare("
-                    SELECT TRIM(r.codgrupo) AS codgrupo,
-                           TRIM(r.codsubg)  AS codsubg
-                    FROM   inrefinv r
-                    WHERE  TRIM(r.codr) = :codr
-                    LIMIT 1
-                ");
-                $refStmt->execute([':codr' => trim($it['codart'])]);
-                $ref = $refStmt->fetch(\PDO::FETCH_ASSOC);
-
-                $it['dias_vencimiento'] = null; // null => N/A
-
-                if ($ref && $ref['codgrupo'] !== '' && $ref['codsubg'] !== '') {
-                    $canal    = trim($pedidoBase['codtipocli'] ?? '');
-                    $codcli   = trim($pedidoBase['codcp'] ?? '');
-                    $presLabel = $it['presentacion_label']; // 'Refrigeración' o 'Congelación'
-
-                    // 1. Buscar con cliente específico
-                    $cadStmt = $this->db->pdo->prepare("
-                        SELECT ic.cantidad
-                        FROM   inv_caducidad ic
-                        WHERE  TRIM(ic.canal)         = :canal
-                          AND  TRIM(ic.codgrupo)      = :codgrupo
-                          AND  TRIM(ic.codsubg)       = :codsubg
-                          AND  TRIM(ic.presentacion)  = :presentacion
-                          AND  TRIM(ic.codc)          = :codc
-                        LIMIT 1
-                    ");
-                    $cadStmt->execute([
-                        ':canal'        => $canal,
-                        ':codgrupo'     => $ref['codgrupo'],
-                        ':codsubg'      => $ref['codsubg'],
-                        ':presentacion' => $presLabel,
-                        ':codc'         => $codcli,
-                    ]);
-                    $cadRow = $cadStmt->fetch(\PDO::FETCH_ASSOC);
-
-                    // 2. Si no existe, buscar genérico (codc IS NULL)
-                    if (!$cadRow) {
-                        $cadGenStmt = $this->db->pdo->prepare("
-                            SELECT ic.cantidad
-                            FROM   inv_caducidad ic
-                            WHERE  TRIM(ic.canal)        = :canal
-                              AND  TRIM(ic.codgrupo)     = :codgrupo
-                              AND  TRIM(ic.codsubg)      = :codsubg
-                              AND  TRIM(ic.presentacion) = :presentacion
-                              AND  ic.codc IS NULL
-                            LIMIT 1
-                        ");
-                        $cadGenStmt->execute([
-                            ':canal'        => $canal,
-                            ':codgrupo'     => $ref['codgrupo'],
-                            ':codsubg'      => $ref['codsubg'],
-                            ':presentacion' => $presLabel,
-                        ]);
-                        $cadRow = $cadGenStmt->fetch(\PDO::FETCH_ASSOC);
-                    }
-
-                    if ($cadRow) {
-                        $it['dias_vencimiento'] = (int)$cadRow['cantidad'];
-                    }
-                }
+                // ── Lote base para fecha de sacrificio: primer lote no vacío ──
+                $it['lote_sacrificio'] = !empty($lotes) ? trim($lotes[0]['lote'] ?? '') : '';
             }
             unset($it);
 
             $items = array_merge($items, $docItems);
         }
+
+        // ── Datos de referencia en lote (una consulta por tabla) ──────────
+
+        // 1. Grupo/subgrupo por artículo (inrefinv)
+        $refPorCodr = [];
+        $codArts = array_values(array_unique(array_filter(array_map(
+            static fn($it) => trim($it['codart']),
+            $items
+        ))));
+        if (!empty($codArts)) {
+            $ph = implode(',', array_fill(0, count($codArts), '?'));
+            $refStmt = $this->db->pdo->prepare("
+                SELECT TRIM(r.codr)     AS codr,
+                       TRIM(r.codgrupo) AS codgrupo,
+                       TRIM(r.codsubg)  AS codsubg
+                FROM   inrefinv r
+                WHERE  r.codr IN ($ph)
+            ");
+            $refStmt->execute($codArts);
+            foreach ($refStmt->fetchAll(\PDO::FETCH_ASSOC) as $r) {
+                $refPorCodr[$r['codr']] = $r;
+            }
+        }
+
+        // 2. Caducidad del canal del usuario activo (inv_caducidad)
+        $cadMap = [];
+        if ($canal !== '') {
+            $cadStmt = $this->db->pdo->prepare("
+                SELECT TRIM(ic.codgrupo)           AS codgrupo,
+                       TRIM(ic.codsubg)            AS codsubg,
+                       TRIM(ic.presentacion)       AS presentacion,
+                       TRIM(COALESCE(ic.codc, '')) AS codc,
+                       ic.cantidad
+                FROM   inv_caducidad ic
+                WHERE  ic.canal = :canal
+            ");
+            $cadStmt->execute([':canal' => $canal]);
+            foreach ($cadStmt->fetchAll(\PDO::FETCH_ASSOC) as $c) {
+                $key = $c['codgrupo'] . '|' . $c['codsubg'] . '|' . $c['presentacion'] . '|' . $c['codc'];
+                $cadMap[$key] = (int)$c['cantidad'];
+            }
+        }
+
+        // 3. Fecha de sacrificio: lote → RM (cuerpomov) → cuerpoaux
+        //    Se toma el primer tm+prefijo+documento con tm='RM' que tenga el lote.
+        $sacrificioPorLote = [];
+        $lotesSacrificio = array_values(array_unique(array_filter(
+            array_column($items, 'lote_sacrificio')
+        )));
+        if (!empty($lotesSacrificio)) {
+            $ph = implode(',', array_fill(0, count($lotesSacrificio), '?'));
+            $sacStmt = $this->db->pdo->prepare("
+                SELECT TRIM(cm.lote)      AS lote,
+                       ca.fechasacrificio AS fechasacrificio
+                FROM   cuerpomov cm
+                INNER  JOIN cuerpoaux ca
+                        ON  ca.tm        = cm.tm
+                        AND ca.prefijo   = cm.prefijo
+                        AND ca.documento = cm.documento
+                WHERE  cm.tm   = 'RM'
+                  AND  cm.lote IN ($ph)
+                ORDER  BY cm.documento ASC
+            ");
+            $sacStmt->execute($lotesSacrificio);
+            foreach ($sacStmt->fetchAll(\PDO::FETCH_ASSOC) as $s) {
+                if (!isset($sacrificioPorLote[$s['lote']])) {
+                    $sacrificioPorLote[$s['lote']] = $s['fechasacrificio'];
+                }
+            }
+        }
+
+        // ── Cálculo final por ítem: días/fecha de vencimiento y sacrificio ──
+        $hoy = new \DateTimeImmutable('today');
+        foreach ($items as &$it) {
+            $it['dias_vencimiento']      = null; // null => N/A
+            $it['fecha_vencimiento_fmt'] = null;
+            $it['fecha_sacrificio_fmt']  = null;
+
+            $ref = $refPorCodr[trim($it['codart'])] ?? null;
+            if ($ref && $ref['codgrupo'] !== '' && $ref['codsubg'] !== '') {
+                $base = $ref['codgrupo'] . '|' . $ref['codsubg'] . '|' . $it['presentacion_label'] . '|';
+                // 1) Cliente específico  2) Genérico (codc IS NULL)
+                $dias = $cadMap[$base . $codcli] ?? $cadMap[$base] ?? null;
+                if ($dias !== null) {
+                    $it['dias_vencimiento']      = $dias;
+                    $it['fecha_vencimiento_fmt'] = $hoy->modify("+{$dias} days")->format('d/m/Y');
+                }
+            }
+
+            $loteSac = $it['lote_sacrificio'] ?? '';
+            if ($loteSac !== '' && !empty($sacrificioPorLote[$loteSac])) {
+                $fs = \DateTimeImmutable::createFromFormat('Y-m-d', $sacrificioPorLote[$loteSac]);
+                if ($fs !== false) {
+                    $it['fecha_sacrificio_fmt'] = $fs->format('d/m/Y');
+                }
+            }
+        }
+        unset($it);
 
         return renderView(
             $response,

@@ -104,6 +104,8 @@ if (isset($_SESSION['errors'])) {
     .prep-wrap .item-info { flex: 1; min-width: 0; }
     .prep-wrap .item-cod { font-size: .68rem; color: #888; font-weight: 600; letter-spacing: .04em; }
     .prep-wrap .item-desc { font-size: .92rem; font-weight: 700; color: #1a2e1a; line-height: 1.25; }
+    .prep-wrap .item-fechas { display: inline-flex; gap: .75rem; margin-left: .6rem; font-size: .72rem; font-weight: 400; color: #4b5b4b; white-space: nowrap; vertical-align: baseline; }
+    .prep-wrap .item-fechas .lbl { color: #8a948a; }
 
     /* badge origen en el card */
     .item-origen-badge {
@@ -376,7 +378,12 @@ if (isset($_SESSION['errors'])) {
                         <div class="item-num"><?= $globalIdx + 1 ?></div>
                         <div class="item-info">
                             <div class="item-cod"><?= htmlspecialchars($it['codart']) ?></div>
-                            <div class="item-desc"><?= htmlspecialchars($it['descripcion']) ?></div>
+                            <?php
+                                $fSac  = $it['fecha_sacrificio_fmt']  ?? null;
+                                $dVto  = $it['dias_vencimiento']      ?? null;
+                                $fVto  = $it['fecha_vencimiento_fmt'] ?? null;
+                            ?>
+                            <div class="item-desc"><?= htmlspecialchars($it['descripcion']) ?><?php if ($fSac !== null || $dVto !== null): ?><span class="item-fechas"><?php if ($fSac !== null): ?><span><span class="lbl">Sacrificio:</span> <?= htmlspecialchars($fSac) ?></span><?php endif; ?><?php if ($dVto !== null): ?><span><span class="lbl">Vence:</span> <?= (int)$dVto ?> días &mdash; <?= htmlspecialchars($fVto) ?></span><?php endif; ?></span><?php endif; ?></div>
                         </div>
                         <?php if ($esIntegrado): ?>
                             <span class="item-origen-badge">PV <?= htmlspecialchars(str_pad($docOrigen, 8, '0', STR_PAD_LEFT)) ?></span>
