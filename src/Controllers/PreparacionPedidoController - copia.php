@@ -195,8 +195,7 @@ class PreparacionPedidoController
         $apExistenteStmt->execute([':docaux' => $docs[0], ':prefaux' => trim($pedido['prefijo'])]);
         $apExistente = $apExistenteStmt->fetch(\PDO::FETCH_ASSOC);
 
-        $pesosAP     = [];
-        $pesosAPLote = [];
+        $pesosAP = [];
         if ($apExistente) {
             $pesosAPStmt = $this->db->pdo->prepare("
                 SELECT TRIM(cm.registro) AS registro, cm.cantidad AS peso
@@ -208,8 +207,7 @@ class PreparacionPedidoController
             ");
             $pesosAPStmt->execute([':prefijo' => $apExistente['pref_ap'], ':documento' => $apExistente['doc_ap']]);
             foreach ($pesosAPStmt->fetchAll(\PDO::FETCH_ASSOC) as $p) {
-                $pesosAP[trim($p['registro'])]       = (float)$p['peso'];
-                $pesosAPLote[trim($p['registro'])][] = (float)$p['peso'];
+                $pesosAP[trim($p['registro'])] = (float)$p['peso'];
             }
         }
 
@@ -349,18 +347,10 @@ class PreparacionPedidoController
 
         // 3. Fecha de sacrificio: lote → RM (cuerpomov) → cuerpoaux
         //    Se toma el primer tm+prefijo+documento con tm='RM' que tenga el lote.
-        //    Se consultan TODOS los lotes de todos los ítems (una sola consulta).
         $sacrificioPorLote = [];
-        $lotesSacrificio = [];
-        foreach ($items as $it) {
-            foreach (($it['lotes'] ?? []) as $l) {
-                $lv = trim($l['lote'] ?? '');
-                if ($lv !== '') {
-                    $lotesSacrificio[$lv] = true;
-                }
-            }
-        }
-        $lotesSacrificio = array_keys($lotesSacrificio);
+        $lotesSacrificio = array_values(array_unique(array_filter(
+            array_column($items, 'lote_sacrificio')
+        )));
         if (!empty($lotesSacrificio)) {
             $ph = implode(',', array_fill(0, count($lotesSacrificio), '?'));
             $sacStmt = $this->db->pdo->prepare("
@@ -383,29 +373,16 @@ class PreparacionPedidoController
             }
         }
 
-        // ── Cálculo final: vencimiento/sacrificio por ítem y POR LOTE ─────
+        // ── Cálculo final por ítem: días/fecha de vencimiento y sacrificio ──
         $hoy = new \DateTimeImmutable('today');
-        $fmtSacrificio = static function (?string $fecha) {
-            if (empty($fecha)) {
-                return null;
-            }
-            $d = \DateTimeImmutable::createFromFormat('Y-m-d', $fecha);
-            return $d !== false ? $d->format('d/m/Y') : null;
-        };
-
         foreach ($items as &$it) {
             $it['dias_vencimiento']      = null; // null => N/A
             $it['fecha_vencimiento_fmt'] = null;
             $it['fecha_sacrificio_fmt']  = null;
 
-            $ref     = $refPorCodr[trim($it['codart'])] ?? null;
-            $refOk   = $ref && $ref['codgrupo'] !== '' && $ref['codsubg'] !== '';
-            $refBase = $refOk ? $ref['codgrupo'] . '|' . $ref['codsubg'] . '|' : null;
-
-            // Nivel ítem (badge del encabezado y sticker consolidado):
-            // usa la presentación del ítem (último lote o Refrigeración)
-            if ($refOk) {
-                $base = $refBase . $it['presentacion_label'] . '|';
+            $ref = $refPorCodr[trim($it['codart'])] ?? null;
+            if ($ref && $ref['codgrupo'] !== '' && $ref['codsubg'] !== '') {
+                $base = $ref['codgrupo'] . '|' . $ref['codsubg'] . '|' . $it['presentacion_label'] . '|';
                 // 1) Cliente específico  2) Genérico (codc IS NULL)
                 $dias = $cadMap[$base . $codcli] ?? $cadMap[$base] ?? null;
                 if ($dias !== null) {
@@ -415,34 +392,11 @@ class PreparacionPedidoController
             }
 
             $loteSac = $it['lote_sacrificio'] ?? '';
-            if ($loteSac !== '') {
-                $it['fecha_sacrificio_fmt'] = $fmtSacrificio($sacrificioPorLote[$loteSac] ?? null);
-            }
-
-            // Nivel lote: cada lote con SU presentación, SUS días/fecha de
-            // vencimiento y SU fecha de sacrificio (certificado de calidad)
-            foreach (($it['lotes'] ?? []) as $li => $l) {
-                $presInt   = (int)($l['presentacion'] ?? 1);
-                $presLabel = $presEnumMap[$presInt] ?? 'Refrigeración';
-
-                $dias = null;
-                $fvto = null;
-                if ($refOk) {
-                    $base = $refBase . $presLabel . '|';
-                    $dias = $cadMap[$base . $codcli] ?? $cadMap[$base] ?? null;
-                    if ($dias !== null) {
-                        $fvto = $hoy->modify("+{$dias} days")->format('d/m/Y');
-                    }
+            if ($loteSac !== '' && !empty($sacrificioPorLote[$loteSac])) {
+                $fs = \DateTimeImmutable::createFromFormat('Y-m-d', $sacrificioPorLote[$loteSac]);
+                if ($fs !== false) {
+                    $it['fecha_sacrificio_fmt'] = $fs->format('d/m/Y');
                 }
-
-                $lv = trim($l['lote'] ?? '');
-
-                $it['lotes'][$li]['presentacion_label']    = $presLabel;
-                $it['lotes'][$li]['dias_vencimiento']      = $dias;
-                $it['lotes'][$li]['fecha_vencimiento_fmt'] = $fvto;
-                $it['lotes'][$li]['fecha_sacrificio_fmt']  = $lv !== ''
-                    ? $fmtSacrificio($sacrificioPorLote[$lv] ?? null)
-                    : null;
             }
         }
         unset($it);
@@ -456,7 +410,6 @@ class PreparacionPedidoController
                 'pedidosIntegrados' => $pedidosIntegrados,
                 'items'             => $items,
                 'pesosAP'           => $pesosAP,
-                'pesosAPLote'       => $pesosAPLote,
                 'apExistente'       => $apExistente,
             ]
         );
@@ -471,12 +424,12 @@ class PreparacionPedidoController
         $body    = $request->getParsedBody();
         $accion  = $body['accion'] ?? '';
 
-        // NOTA: cuando accion='cerrar' NO se salta el guardado: primero se
-        // almacena el cuerpo con los pesos actuales y al final se llama cerrar().
+        if ($accion === 'cerrar') {
+            return $this->cerrar($request, $response, $args);
+        }
 
         $registros       = $body['registros']       ?? [];
         $pesos           = $body['pesos']            ?? [];
-        $pesosLote       = $body['pesos_lote']       ?? [];
         $nrodocOrigenes  = $body['nrodoc_origen']    ?? [];
         $docsIntegrados  = $body['docs_integrados']  ?? [];
         $prefsIntegrados = $body['prefs_integrados'] ?? [];
@@ -524,94 +477,40 @@ class PreparacionPedidoController
                 ORDER  BY cm.registro
             ");
             $iStmt->execute([':prefijo' => $pref, ':doc' => $doc]);
-            $docItems = $iStmt->fetchAll(\PDO::FETCH_ASSOC);
-
-            // Lotes de itemmov por registro (una sola consulta por doc):
-            // cada registro de lote generará su propia línea en la AP.
-            $loteStmt = $this->db->pdo->prepare("
-                SELECT TRIM(i.registro) AS registro,
-                       TRIM(i.lote)     AS lote,
-                       i.cantidad
-                FROM   itemmov i
-                WHERE  TRIM(i.tm)        = 'PV'
-                  AND  TRIM(i.prefijo)   = :prefijo
-                  AND  TRIM(i.documento) = :doc
-                ORDER  BY i.hora ASC
-            ");
-            $loteStmt->execute([':prefijo' => $pref, ':doc' => $doc]);
-            $lotesPorRegistro = [];
-            foreach ($loteStmt->fetchAll(\PDO::FETCH_ASSOC) as $l) {
-                $lotesPorRegistro[$l['registro']][] = $l;
-            }
-
-            foreach ($docItems as $it) {
-                $it['lotes'] = $lotesPorRegistro[trim($it['registro'])] ?? [];
+            foreach ($iStmt->fetchAll(\PDO::FETCH_ASSOC) as $it) {
                 $allItems[] = $it;
             }
         }
 
-        // ── Armar lineItems: UNA LÍNEA AP POR CADA LOTE de itemmov ────────
-        //    - Ítem con lotes: cada registro de lote genera su línea con el
-        //      peso propio del lote (itemmov.cantidad) y su código de lote.
-        //    - Ítem sin lotes: una sola línea con el peso definitivo digitado
-        //      y lote en blanco.
-        //    Diferenciadores: lote + numreg (consecutivo por línea AP) +
-        //    registro (ítem del PV de origen).
+        // ── Armar lineItems con los pesos enviados ────────────────────────
         $lineItems  = [];
         $totalVriva = 0.0;
         $totalValor = 0.0;
-        $numreg     = 0;
 
         foreach ($allItems as $idx => $it) {
+            $pesoVal = (float)($pesos[$idx] ?? 0);
             $valor   = (float)$it['valor'];
             $piva    = (float)$it['piva'];
             $descto  = (float)$it['descto'];
 
-            $lotesItem = $it['lotes'] ?? [];
-            if (!empty($lotesItem)) {
-                // Peso de cada lote: el validado en pantalla (pesos_lote);
-                // si no llegó, respaldo con el peso registrado en itemmov.
-                $lineas = [];
-                foreach (array_values($lotesItem) as $j => $l) {
-                    $pesoPost = $pesosLote[$idx][$j] ?? '';
-                    $lineas[] = [
-                        'cantidad' => ($pesoPost !== '' && is_numeric($pesoPost))
-                                        ? (float)$pesoPost
-                                        : (float)$l['cantidad'],
-                        'lote'     => trim($l['lote']) !== '' ? trim($l['lote']) : ' ',
-                    ];
-                }
-            } else {
-                $lineas = [[
-                    'cantidad' => (float)($pesos[$idx] ?? 0),
-                    'lote'     => ' ',
-                ]];
-            }
+            $totalVriva += $pesoVal * $valor * ($piva / 100);
+            $totalValor += $pesoVal * $valor * (1 + $piva / 100) * (1 - $descto / 100);
 
-            foreach ($lineas as $ln) {
-                $pesoVal = $ln['cantidad'];
-
-                $totalVriva += $pesoVal * $valor * ($piva / 100);
-                $totalValor += $pesoVal * $valor * (1 + $piva / 100) * (1 - $descto / 100);
-
-                $numreg++;
-                $lineItems[] = [
-                    'numreg'       => $numreg,
-                    'registro'     => trim($it['registro']),
-                    'codr'         => $it['codart'],
-                    'descr'        => $it['descripcion'],
-                    'comencpo'     => $it['comencpo'],
-                    'unidad'       => $it['unidad'],
-                    'cantidad'     => $pesoVal,
-                    'valor'        => $valor,
-                    'bodega'       => $it['bodega'],
-                    'piva'         => $piva,
-                    'descto'       => $descto,
-                    'lote'         => $ln['lote'],
-                    'docaux'       => $it['nrodoc_origen'] ?? $nrodoc,
-                    'prefaux'      => $pedido['prefijo'],
-                ];
-            }
+            $lineItems[] = [
+                'numreg'       => $idx + 1,
+                'registro'     => trim($it['registro']),
+                'codr'         => $it['codart'],
+                'descr'        => $it['descripcion'],
+                'comencpo'     => $it['comencpo'],
+                'unidad'       => $it['unidad'],
+                'cantidad'     => $pesoVal,
+                'valor'        => $valor,
+                'bodega'       => $it['bodega'],
+                'piva'         => $piva,
+                'descto'       => $descto,
+                'docaux'       => $it['nrodoc_origen'] ?? $nrodoc,
+                'prefaux'      => $pedido['prefijo'],
+            ];
         }
 
         // ── AP existente (solo sobre el doc base) ─────────────────────────
@@ -649,11 +548,11 @@ class PreparacionPedidoController
                     INSERT INTO cuerpomov
                         (tm, prefijo, documento, numreg, registro,
                          codr, descr, comencpo, unidad, cantidad, cantent,
-                         valor, bodega, piva, descto, lote, docaux, tmaux, prefaux)
+                         valor, bodega, piva, descto, docaux, tmaux, prefaux)
                     VALUES
                         ('AP', :pref, :doc, :numreg, :registro,
                          :codr, :descr, :comencpo, :unidad, :cantidad, 0,
-                         :valor, :bodega, :piva, :descto, :lote, :docaux, 'PV', :prefaux)
+                         :valor, :bodega, :piva, :descto, :docaux, 'PV', :prefaux)
                 ");
                 foreach ($lineItems as $li) {
                     $insItem->execute([
@@ -670,7 +569,6 @@ class PreparacionPedidoController
                         ':bodega'   => $li['bodega'],
                         ':piva'     => $li['piva'],
                         ':descto'   => $li['descto'],
-                        ':lote'     => $li['lote'],
                         ':docaux'   => $li['docaux'],
                         ':prefaux'  => $li['prefaux'],
                     ]);
@@ -735,11 +633,11 @@ class PreparacionPedidoController
                     INSERT INTO cuerpomov
                         (tm, prefijo, documento, numreg, registro,
                          codr, descr, comencpo, unidad, cantidad, cantent,
-                         valor, bodega, piva, descto, lote, docaux, tmaux, prefaux)
+                         valor, bodega, piva, descto, docaux, tmaux, prefaux)
                     VALUES
                         ('AP','00',:doc,:numreg,:registro,
                          :codr,:descr,:comencpo,:unidad,:cantidad, 0,
-                         :valor,:bodega,:piva,:descto,:lote,:docaux,'PV',:prefaux)
+                         :valor,:bodega,:piva,:descto,:docaux,'PV',:prefaux)
                 ");
                 foreach ($lineItems as $li) {
                     $insItem->execute([
@@ -755,7 +653,6 @@ class PreparacionPedidoController
                         ':bodega'   => $li['bodega'],
                         ':piva'     => $li['piva'],
                         ':descto'   => $li['descto'],
-                        ':lote'     => $li['lote'],
                         ':docaux'   => $li['docaux'],
                         ':prefaux'  => $li['prefaux'],
                     ]);
@@ -771,20 +668,11 @@ class PreparacionPedidoController
 
         } catch (\Exception $e) {
             $pdo->rollBack();
-            // OJO: cuerpomov/cabezamov son MyISAM (sin rollback real). Si un
-            // INSERT del cuerpo falla, el encabezado ya quedó grabado. Se
-            // muestra el error para poder diagnosticarlo (collation/sql_mode).
             error_log('PreparacionPedidoController::guardar error: ' . $e->getMessage());
-            $_SESSION['errors'] = ['No se pudo guardar el detalle de la preparación: ' . $e->getMessage()];
             return $response->withHeader(
                 'Location',
                 '/preparacion-pedido/' . urlencode($nrodoc) . '/preparar'
             )->withStatus(302);
-        }
-
-        // ── Si la acción es cerrar: cuerpo ya guardado, ahora cambiar estados ──
-        if ($accion === 'cerrar') {
-            return $this->cerrar($request, $response, $args);
         }
 
         $extraParams = '';

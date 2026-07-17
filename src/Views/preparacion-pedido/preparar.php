@@ -106,6 +106,8 @@ if (isset($_SESSION['errors'])) {
     .prep-wrap .item-desc { font-size: .92rem; font-weight: 700; color: #1a2e1a; line-height: 1.25; }
     .prep-wrap .item-fechas { display: inline-flex; gap: .75rem; margin-left: .6rem; font-size: .72rem; font-weight: 400; color: #4b5b4b; white-space: nowrap; vertical-align: baseline; }
     .prep-wrap .item-fechas .lbl { color: #8a948a; }
+    .lote-fechas { display: flex; gap: .75rem; flex-wrap: wrap; font-size: .7rem; font-weight: 400; color: #4b5b4b; margin-top: .1rem; }
+    .lote-fechas .lbl { color: #8a948a; }
 
     /* badge origen en el card */
     .item-origen-badge {
@@ -151,6 +153,16 @@ if (isset($_SESSION['errors'])) {
     .lote-lote-id { font-size: .68rem; color: #888; font-weight: 600; }
     .lote-peso-val { font-size: .9rem; font-weight: 700; color: #15803d; font-family: monospace; white-space: nowrap; }
     .lote-peso-label { font-size: .6rem; color: #888; }
+    .peso-lote-input {
+        width: 92px; text-align: right;
+        font-size: .9rem; font-weight: 700; color: #15803d; font-family: monospace;
+        border: 1.5px solid #86b98f; border-radius: .3rem;
+        padding: .22rem .4rem; outline: none; background: #fff;
+    }
+    .peso-lote-input:focus { border-color: #15803d; box-shadow: 0 0 0 2px rgba(21,128,61,.15); }
+    .prep-wrap .peso-input[readonly] {
+        background: #f3f4f6; color: #374151; border-color: #d1d5db; cursor: default;
+    }
     .btn-sticker-lote {
         display: inline-flex; align-items: center; gap: .25rem;
         background: #f59e0b; color: #fff; border: none;
@@ -379,9 +391,11 @@ if (isset($_SESSION['errors'])) {
                         <div class="item-info">
                             <div class="item-cod"><?= htmlspecialchars($it['codart']) ?></div>
                             <?php
-                                $fSac  = $it['fecha_sacrificio_fmt']  ?? null;
-                                $dVto  = $it['dias_vencimiento']      ?? null;
-                                $fVto  = $it['fecha_vencimiento_fmt'] ?? null;
+                                // Fechas a nivel de ítem: solo cuando NO hay lotes
+                                // (con lotes, cada lote muestra las suyas)
+                                $fSac  = empty($lotes) ? ($it['fecha_sacrificio_fmt']  ?? null) : null;
+                                $dVto  = empty($lotes) ? ($it['dias_vencimiento']      ?? null) : null;
+                                $fVto  = empty($lotes) ? ($it['fecha_vencimiento_fmt'] ?? null) : null;
                             ?>
                             <div class="item-desc"><?= htmlspecialchars($it['descripcion']) ?><?php if ($fSac !== null || $dVto !== null): ?><span class="item-fechas"><?php if ($fSac !== null): ?><span><span class="lbl">Sacrificio:</span> <?= htmlspecialchars($fSac) ?></span><?php endif; ?><?php if ($dVto !== null): ?><span><span class="lbl">Vence:</span> <?= (int)$dVto ?> días &mdash; <?= htmlspecialchars($fVto) ?></span><?php endif; ?></span><?php endif; ?></div>
                         </div>
@@ -432,6 +446,10 @@ if (isset($_SESSION['errors'])) {
 
                         <?php foreach ($lotes as $li => $lote):
                             $lotePeso   = (float)$lote['cantidad'];
+                            // Si la AP ya tiene peso validado para este lote (por posición), usarlo
+                            if (isset($pesosAPLote[$registro_key][$li])) {
+                                $lotePeso = (float)$pesosAPLote[$registro_key][$li];
+                            }
                             $loteId     = trim($lote['lote'] ?? '');
                             $loteObs    = trim($lote['observacion'] ?? '');
                             $idxLote    = $globalIdx . '_' . $li;
@@ -442,24 +460,51 @@ if (isset($_SESSION['errors'])) {
                                 <?php if ($loteId !== ''): ?>
                                     <div class="lote-lote-id">Lote: <?= htmlspecialchars($loteId) ?></div>
                                 <?php endif; ?>
+                                <?php
+                                    $lSac  = $lote['fecha_sacrificio_fmt']  ?? null;
+                                    $lDias = $lote['dias_vencimiento']      ?? null;
+                                    $lFvto = $lote['fecha_vencimiento_fmt'] ?? null;
+                                    $lPres = $lote['presentacion_label']    ?? '';
+                                ?>
+                                <?php if ($lSac !== null || $lDias !== null || $lPres !== ''): ?>
+                                    <div class="lote-fechas">
+                                        <?php if ($lSac !== null): ?>
+                                            <span><span class="lbl">Sacrificio:</span> <?= htmlspecialchars($lSac) ?></span>
+                                        <?php endif; ?>
+                                        <?php if ($lPres !== ''): ?>
+                                            <span><span class="lbl">Present.:</span> <?= htmlspecialchars($lPres) ?></span>
+                                        <?php endif; ?>
+                                        <?php if ($lDias !== null): ?>
+                                            <span><span class="lbl">Vence:</span> <?= (int)$lDias ?> días &mdash; <?= htmlspecialchars($lFvto) ?></span>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endif; ?>
                                 <?php if ($loteObs !== ''): ?>
                                     <div style="font-size:.7rem;color:#555;"><?= htmlspecialchars($loteObs) ?></div>
                                 <?php endif; ?>
                             </div>
                             <div>
-                                <div class="lote-peso-label">Peso</div>
-                                <div class="lote-peso-val"><?= number_format($lotePeso, 3) ?> kg</div>
+                                <div class="lote-peso-label">Peso (kg)</div>
+                                <input type="text"
+                                       inputmode="decimal"
+                                       id="peso_lote_<?= $idxLote ?>"
+                                       name="pesos_lote[<?= $globalIdx ?>][<?= $li ?>]"
+                                       class="peso-lote-input"
+                                       data-item="<?= $globalIdx ?>"
+                                       value="<?= number_format($lotePeso, 3, '.', '') ?>"
+                                       autocomplete="off"
+                                       required>
                             </div>
                             <button type="button"
                                     class="btn-sticker-lote"
                                     onclick="imprimirStickerLote(event,
                                         '<?= htmlspecialchars(addslashes($it['codart'])) ?>',
                                         '<?= htmlspecialchars(addslashes($it['descripcion'])) ?>',
-                                        '<?= number_format($lotePeso, 3, '.', '') ?>',
+                                        document.getElementById('peso_lote_<?= $idxLote ?>').value,
                                         '<?= htmlspecialchars(addslashes($loteId)) ?>',
                                         '<?= htmlspecialchars(addslashes($docOrigen)) ?>',
-                                        <?= (int)($diasVenc ?? 0) ?>,
-                                        '<?= htmlspecialchars(addslashes($it['presentacion_label'] ?? '')) ?>')">
+                                        <?= (int)($lote['dias_vencimiento'] ?? 0) ?>,
+                                        '<?= htmlspecialchars(addslashes($lote['presentacion_label'] ?? '')) ?>')">
                                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                     <path stroke-linecap="round" stroke-linejoin="round"
                                           d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4H9a2 2 0 00-2 2v2a2 2 0 002 2h6a2 2 0 002-2v-2a2 2 0 00-2-2zm0 0h6"/>
@@ -486,16 +531,16 @@ if (isset($_SESSION['errors'])) {
                             <div class="cmp-val <?= $acumuladoLotes >= $solicitado - 0.001 ? 'green' : 'amber' ?>"><?= number_format($acumuladoLotes, 3) ?></div>
                         </div>
                         <div class="peso-group">
-                            <label for="peso_<?= $globalIdx ?>">Peso definitivo (kg)</label>
+                            <label for="peso_<?= $globalIdx ?>"><?= !empty($lotes) ? 'Total lotes (kg)' : 'Peso definitivo (kg)' ?></label>
                             <input type="text"
                                    inputmode="decimal"
                                    id="peso_<?= $globalIdx ?>"
                                    name="pesos[]"
                                    class="peso-input"
                                    data-solicitado="<?= number_format($solicitado, 3, '.', '') ?>"
-                                   value="<?= $propuesta ?>"
+                                   value="<?= !empty($lotes) ? number_format($acumuladoLotes, 3, '.', '') : $propuesta ?>"
                                    autocomplete="off"
-                                   required>
+                                   <?= !empty($lotes) ? 'readonly title="Total automático: se calcula sumando el peso de cada lote"' : 'required' ?>>
                         </div>
                         <button type="button"
                                 class="btn-sticker"
@@ -601,6 +646,17 @@ if (isset($_SESSION['errors'])) {
     }
 
     function validarForm() {
+        // Pesos por lote: todos válidos y mayores a 0
+        const lotesInp = document.querySelectorAll('.peso-lote-input');
+        for (const inp of lotesInp) {
+            const v = parseFloat(inp.value);
+            if (inp.value === '' || isNaN(v) || v <= 0) {
+                inp.focus(); inp.style.borderColor = '#dc2626';
+                alert('Ingrese un peso válido (mayor a 0) para todos los lotes.');
+                return false;
+            }
+            inp.style.borderColor = '';
+        }
         const inputs = document.querySelectorAll('.peso-input');
         for (const inp of inputs) {
             const v = parseFloat(inp.value);
@@ -694,15 +750,60 @@ if (isset($_SESSION['errors'])) {
     document.addEventListener('DOMContentLoaded', () => {
 
         // ── Inicializar campos de peso ──────────────────────────────
+        // Recalcula el total del ítem sumando sus lotes
+        function recalcularTotalItem(itemIdx) {
+            const lotes = document.querySelectorAll('.peso-lote-input[data-item="' + itemIdx + '"]');
+            if (!lotes.length) return;
+            let suma = 0;
+            lotes.forEach(l => { const n = parseFloat(l.value); if (!isNaN(n)) suma += n; });
+            const total = document.getElementById('peso_' + itemIdx);
+            if (total) total.value = suma.toFixed(3);
+        }
+
+        // Campos de peso por lote
+        document.querySelectorAll('.peso-lote-input').forEach(inp => {
+            inp.addEventListener('focus', function () {
+                setTimeout(() => this.select(), 10);
+            });
+            inp.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const all = [...document.querySelectorAll('.peso-lote-input, .peso-input:not([readonly])')];
+                    const i   = all.indexOf(this);
+                    if (i >= 0 && i < all.length - 1) all[i + 1].focus();
+                }
+            });
+            inp.addEventListener('input', function () {
+                let v = this.value.replace(/[^0-9.]/g, '');
+                const partes = v.split('.');
+                if (partes.length > 2) v = partes[0] + '.' + partes.slice(1).join('');
+                this.value = v;
+                recalcularTotalItem(this.dataset.item);
+            });
+            inp.addEventListener('blur', function () {
+                let v = this.value.trim();
+                if (v === '' || v === '.') { this.value = '0.000'; }
+                else {
+                    if (v.startsWith('.')) v = '0' + v;
+                    const n = parseFloat(v);
+                    this.value = isNaN(n) ? '0.000' : n.toFixed(3);
+                }
+                recalcularTotalItem(this.dataset.item);
+            });
+        });
+
         document.querySelectorAll('.peso-input').forEach(inp => {
 
             // Foco: seleccionar todo el contenido
             inp.addEventListener('focus', function () {
+                if (this.readOnly) return;
                 setTimeout(() => this.select(), 10);
             });
 
             // Doble click: cargar el valor solicitado
             inp.addEventListener('dblclick', function () {
+                if (this.readOnly) return;
                 this.value = this.dataset.solicitado || '0.000';
                 setTimeout(() => this.select(), 10);
             });
@@ -712,7 +813,7 @@ if (isset($_SESSION['errors'])) {
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     e.stopPropagation();
-                    const all = [...document.querySelectorAll('.peso-input')];
+                    const all = [...document.querySelectorAll('.peso-lote-input, .peso-input:not([readonly])')];
                     const i   = all.indexOf(this);
                     if (i >= 0 && i < all.length - 1) {
                         all[i + 1].focus();
@@ -722,6 +823,7 @@ if (isset($_SESSION['errors'])) {
 
             // Input: filtrar solo dígitos y un punto decimal
             inp.addEventListener('input', function () {
+                if (this.readOnly) return;
                 let v = this.value.replace(/[^0-9.]/g, '');
                 // Permitir solo un punto decimal
                 const partes = v.split('.');
@@ -731,6 +833,7 @@ if (isset($_SESSION['errors'])) {
 
             // Blur: normalizar formato (0.xxx)
             inp.addEventListener('blur', function () {
+                if (this.readOnly) return;
                 let v = this.value.trim();
                 if (v === '' || v === '.') { this.value = '0.000'; return; }
                 if (v.startsWith('.')) v = '0' + v;  // .78 → 0.78
@@ -739,7 +842,7 @@ if (isset($_SESSION['errors'])) {
             });
         });
 
-        const first = document.querySelector('.peso-input');
+        const first = document.querySelector('.peso-lote-input, .peso-input:not([readonly])');
         if (first) first.focus();
 
         const urlParams = new URLSearchParams(window.location.search);
