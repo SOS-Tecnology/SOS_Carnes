@@ -20,6 +20,7 @@ use App\Controllers\PlanillaPedidosController;
 use App\Controllers\PreparacionPedidoController;
 use App\Controllers\StickerController;
 use App\Controllers\InvCaducidadController;
+use App\Controllers\EstadoPedidosController;
 
 // ── Entorno ───────────────────────────────────────────────
 $dotenv = Dotenv::createImmutable(__DIR__);
@@ -264,6 +265,27 @@ $app->group('', function ($group) {
     $group->post('/preparacion-pedido/{nrodoc}/cerrar', function ($request, $response, $args) {
         $ctrl = new PreparacionPedidoController($GLOBALS['db']);
         return $ctrl->cerrar($request, $response, $args);
+    });
+
+    // ── Estado de Pedidos ─────────────────────────────────
+    $group->get('/estado-pedidos', function ($request, $response) {
+        $ctrl = new EstadoPedidosController($GLOBALS['db']);
+        return $ctrl->index($request, $response);
+    });
+
+    $group->get('/estado-pedidos/{nrodoc}/modificar', function ($request, $response, $args) {
+        $ctrl = new EstadoPedidosController($GLOBALS['db']);
+        return $ctrl->modificar($request, $response, $args);
+    });
+
+    $group->post('/estado-pedidos/{nrodoc}/abrir-preparacion', function ($request, $response, $args) {
+        $ctrl = new EstadoPedidosController($GLOBALS['db']);
+        return $ctrl->abrirPreparacion($request, $response, $args);
+    });
+
+    $group->post('/estado-pedidos/{nrodoc}/abrir-alistamiento', function ($request, $response, $args) {
+        $ctrl = new EstadoPedidosController($GLOBALS['db']);
+        return $ctrl->abrirAlistamiento($request, $response, $args);
     });
 
     // ── Sticker para despacho ─────────────────────────────
