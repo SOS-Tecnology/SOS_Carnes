@@ -34,6 +34,15 @@ class PlanillaPedidosController
             WHERE TRIM(tm) = 'PV' AND TRIM(documento) = :doc
         ")->execute([':doc' => $documento]);
 
+        // El alistamiento se completó: cerrar automáticamente cualquier
+        // alerta de prioridad activa asociada a este documento.
+        $this->db->pdo->prepare("
+            UPDATE prioridadmov
+            SET    estado = 'C',
+                   comentario = CONCAT(comentario, ' | Cerrada automáticamente: alistamiento completado')
+            WHERE  TRIM(tm) = 'PV' AND TRIM(documento) = :doc AND estado = 'A'
+        ")->execute([':doc' => $documento]);
+
         $response->getBody()->write(json_encode(['ok' => true]));
         return $response->withHeader('Content-Type', 'application/json');
     }
@@ -510,10 +519,14 @@ class PlanillaPedidosController
                 COALESCE(COUNT(cm.numreg), 0)                                              AS total_items,
                 COALESCE(SUM(CASE WHEN cm.cantent >= cm.cantidad AND cm.cantidad > 0
                                   THEN 1 ELSE 0 END), 0)                                   AS items_completos,
-                COALESCE(SUM(CASE WHEN cm.cantent > 0 THEN 1 ELSE 0 END), 0)              AS items_iniciados
+                COALESCE(SUM(CASE WHEN cm.cantent > 0 THEN 1 ELSE 0 END), 0)              AS items_iniciados,
+                MAX(pm.id)                                                                 AS prioridad_id,
+                MAX(pm.comentario)                                                         AS prioridad_comentario
             FROM cabezatmp c
             LEFT JOIN cuerpomov cm ON c.tm = cm.tm AND c.prefijo = cm.prefijo AND c.documento = cm.documento
             INNER JOIN geclientes g ON c.codcp = g.codcli
+            LEFT JOIN prioridadmov pm ON TRIM(pm.tm) = c.tm AND TRIM(pm.prefijo) = TRIM(c.prefijo)
+                                      AND TRIM(pm.documento) = TRIM(c.documento) AND pm.estado = 'A'
             {$whereClause}
             GROUP BY c.documento, c.prefijo
             ORDER BY c.fechent ASC

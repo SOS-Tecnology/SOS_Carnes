@@ -246,6 +246,7 @@ class PreparacionPedidoController
                        TRIM(cm.codr)     AS codart,
                        TRIM(cm.descr)    AS descripcion,
                        TRIM(cm.comencpo) AS comencpo,
+                       TRIM(cm.codiva)     AS codiva,
                        TRIM(cm.lote)     AS lote,
                        cm.unidad,
                        cm.cantidad,
@@ -515,7 +516,7 @@ class PreparacionPedidoController
                        TRIM(cm.descr)    AS descripcion,
                        TRIM(cm.comencpo) AS comencpo,
                        cm.unidad, cm.valor, TRIM(cm.bodega) AS bodega,
-                       cm.piva, cm.descto,
+                       cm.piva, cm.descto, TRIM(cm.codiva) AS codiva,
                        TRIM(cm.documento) AS nrodoc_origen
                 FROM   cuerpomov cm
                 WHERE  TRIM(cm.tm)        = 'PV'
@@ -605,6 +606,7 @@ class PreparacionPedidoController
                     'cantidad'     => $pesoVal,
                     'valor'        => $valor,
                     'bodega'       => $it['bodega'],
+                    'codiva'       => $it['codiva'],
                     'piva'         => $piva,
                     'descto'       => $descto,
                     'lote'         => $ln['lote'],
@@ -649,11 +651,11 @@ class PreparacionPedidoController
                     INSERT INTO cuerpomov
                         (tm, prefijo, documento, numreg, registro,
                          codr, descr, comencpo, unidad, cantidad, cantent,
-                         valor, bodega, piva, descto, lote, docaux, tmaux, prefaux)
+                         valor, bodega, codiva,piva, descto, lote, docaux, tmaux, prefaux)
                     VALUES
                         ('AP', :pref, :doc, :numreg, :registro,
                          :codr, :descr, :comencpo, :unidad, :cantidad, 0,
-                         :valor, :bodega, :piva, :descto, :lote, :docaux, 'PV', :prefaux)
+                         :valor, :bodega, :codiva, :piva, :descto, :lote, :docaux, 'PV', :prefaux)
                 ");
                 foreach ($lineItems as $li) {
                     $insItem->execute([
@@ -668,6 +670,7 @@ class PreparacionPedidoController
                         ':cantidad' => $li['cantidad'],
                         ':valor'    => $li['valor'],
                         ':bodega'   => $li['bodega'],
+                        ':codiva'   => $li['codiva'],   
                         ':piva'     => $li['piva'],
                         ':descto'   => $li['descto'],
                         ':lote'     => $li['lote'],
@@ -735,11 +738,11 @@ class PreparacionPedidoController
                     INSERT INTO cuerpomov
                         (tm, prefijo, documento, numreg, registro,
                          codr, descr, comencpo, unidad, cantidad, cantent,
-                         valor, bodega, piva, descto, lote, docaux, tmaux, prefaux)
+                         valor, bodega, codiva, piva, descto, lote, docaux, tmaux, prefaux)
                     VALUES
                         ('AP','00',:doc,:numreg,:registro,
                          :codr,:descr,:comencpo,:unidad,:cantidad, 0,
-                         :valor,:bodega,:piva,:descto,:lote,:docaux,'PV',:prefaux)
+                         :valor,:bodega,:codiva,:piva,:descto,:lote,:docaux,'PV',:prefaux)
                 ");
                 foreach ($lineItems as $li) {
                     $insItem->execute([
@@ -753,6 +756,7 @@ class PreparacionPedidoController
                         ':cantidad' => $li['cantidad'],
                         ':valor'    => $li['valor'],
                         ':bodega'   => $li['bodega'],
+                        ':codiva'   => $li['codiva'],
                         ':piva'     => $li['piva'],
                         ':descto'   => $li['descto'],
                         ':lote'     => $li['lote'],

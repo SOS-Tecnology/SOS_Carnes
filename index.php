@@ -21,6 +21,7 @@ use App\Controllers\PreparacionPedidoController;
 use App\Controllers\StickerController;
 use App\Controllers\InvCaducidadController;
 use App\Controllers\EstadoPedidosController;
+use App\Controllers\PrioridadAlistamientoController;
 
 // ── Entorno ───────────────────────────────────────────────
 $dotenv = Dotenv::createImmutable(__DIR__);
@@ -286,6 +287,32 @@ $app->group('', function ($group) {
     $group->post('/estado-pedidos/{nrodoc}/abrir-alistamiento', function ($request, $response, $args) {
         $ctrl = new EstadoPedidosController($GLOBALS['db']);
         return $ctrl->abrirAlistamiento($request, $response, $args);
+    });
+
+    // ── Prioridad de Alistamiento ─────────────────────────
+    $group->get('/prioridad-alistamiento', function ($request, $response) {
+        $ctrl = new PrioridadAlistamientoController($GLOBALS['db']);
+        return $ctrl->index($request, $response);
+    });
+
+    $group->get('/prioridad-alistamiento/crear', function ($request, $response) {
+        $ctrl = new PrioridadAlistamientoController($GLOBALS['db']);
+        return $ctrl->crear($request, $response);
+    });
+
+    $group->post('/prioridad-alistamiento/guardar', function ($request, $response) {
+        $ctrl = new PrioridadAlistamientoController($GLOBALS['db']);
+        return $ctrl->guardar($request, $response);
+    });
+
+    $group->post('/prioridad-alistamiento/{id}/cancelar', function ($request, $response, $args) {
+        $ctrl = new PrioridadAlistamientoController($GLOBALS['db']);
+        return $ctrl->cancelar($request, $response, $args);
+    });
+
+    $group->get('/api/prioridad-alistamiento/pedidos', function ($request, $response) {
+        $ctrl = new PrioridadAlistamientoController($GLOBALS['db']);
+        return $ctrl->apiPedidosPorCanal($request, $response);
     });
 
     // ── Sticker para despacho ─────────────────────────────

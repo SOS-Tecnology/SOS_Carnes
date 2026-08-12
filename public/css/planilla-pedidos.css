@@ -27,30 +27,30 @@
 }
 .pp-stat-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
-    gap: .8rem;
-    margin-bottom: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: .6rem;
+    margin-bottom: .8rem;
 }
 .pp-stat-card {
     background: #f8fafc;
     border: 1px solid #e5e7eb;
-    border-radius: .7rem;
-    padding: 1rem 1rem 1.05rem;
+    border-radius: .6rem;
+    padding: .6rem .75rem .65rem;
     display: flex;
     flex-direction: column;
-    gap: .35rem;
-    min-height: 92px;
+    gap: .2rem;
+    min-height: 64px;
 }
 .pp-stat-card span {
     display: block;
 }
 .pp-stat-value {
-    font-size: 1.6rem;
+    font-size: 1.25rem;
     font-weight: 700;
     color: #0f172a;
 }
 .pp-stat-label {
-    font-size: .82rem;
+    font-size: .74rem;
     color: #475569;
 }
 .pp-summary-controls {
@@ -102,6 +102,66 @@
 }
 .pp-summary + .pp-body {
     margin-top: 0;
+}
+
+/* ── Banda de prioridad / urgencia ─────────────────────────────────── */
+.pp-priority-banner {
+    background: #fef2f2;
+    border: 1px solid #fca5a5;
+    border-left: 5px solid #dc2626;
+    border-radius: .6rem;
+    padding: .55rem .9rem;
+    margin-bottom: .8rem;
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+}
+.pp-priority-banner-empty {
+    display: none;
+}
+.pp-priority-icon {
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+.pp-priority-list {
+    display: flex;
+    gap: 1.4rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+.pp-priority-item {
+    font-size: .8rem;
+    color: #7f1d1d;
+    white-space: nowrap;
+}
+.pp-priority-item strong {
+    color: #b91c1c;
+    font-family: monospace;
+}
+
+/* ── Tarjeta con alerta de prioridad activa ────────────────────────── */
+.pp-card.pp-priority {
+    background: #fef2f2;
+    border-color: #fca5a5;
+    border-top-color: #dc2626;
+    box-shadow: 0 6px 20px rgba(220, 38, 38, .18);
+}
+.pp-card.pp-priority:hover {
+    box-shadow: 0 16px 30px rgba(220, 38, 38, .25);
+}
+.pp-priority-tag {
+    display: inline-block;
+    align-self: flex-start;
+    background: #dc2626;
+    color: #fff;
+    font-size: .66rem;
+    font-weight: 700;
+    letter-spacing: .02em;
+    padding: .15rem .5rem;
+    border-radius: 999px;
+    margin-bottom: .4rem;
 }
 .pp-body {
     background: #ffffff;

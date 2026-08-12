@@ -22,6 +22,16 @@ foreach ($pedidos as $p) {
     }
 }
 
+$prioridades = [];
+foreach ($pedidos as $p) {
+    if (!empty($p['prioridad_id'])) {
+        $prioridades[] = [
+            'nrodoc'     => str_pad($p['nrodoc'], 8, '0', STR_PAD_LEFT),
+            'comentario' => $p['prioridad_comentario'],
+        ];
+    }
+}
+
 ?>
 
 <link rel="stylesheet" href="/css/planilla-pedidos.css">
@@ -40,6 +50,22 @@ foreach ($pedidos as $p) {
         <span class="pp-spinner" id="spinner"></span>
         <span id="refresh-txt">Actualiza cada 30 s</span>
     </div>
+</div>
+
+<div class="pp-priority-banner<?= empty($prioridades) ? ' pp-priority-banner-empty' : '' ?>" id="pp-priority-banner">
+    <?php if (!empty($prioridades)): ?>
+        <span class="pp-priority-icon">⚠</span>
+        <div class="pp-priority-list" id="pp-priority-list">
+            <?php foreach ($prioridades as $pr): ?>
+                <span class="pp-priority-item">
+                    <strong>PV <?= htmlspecialchars($pr['nrodoc']) ?></strong>
+                    — <?= htmlspecialchars($pr['comentario']) ?>
+                </span>
+            <?php endforeach; ?>
+        </div>
+    <?php else: ?>
+        <div class="pp-priority-list" id="pp-priority-list"></div>
+    <?php endif; ?>
 </div>
 
 <div class="pp-summary">
@@ -105,14 +131,19 @@ foreach ($pedidos as $p) {
                         $status = 'listos';
                     }
                     $searchText = htmlspecialchars(strtolower($p['nomcli'] . ' ' . $nrodoc), ENT_QUOTES, 'UTF-8');
+                    $tienePrioridad = !empty($p['prioridad_id']);
                 ?>
-                <div class="pp-card"
+                <div class="pp-card<?= $tienePrioridad ? ' pp-priority' : '' ?>"
                      id="card-<?= htmlspecialchars($p['nrodoc']) ?>"
                      data-completo="<?= ($est['dot'] === '#16a34a') ? '1' : '0' ?>"
                      data-status="<?= $status ?>"
                      data-search="<?= $searchText ?>"
+                     data-prioridad="<?= $tienePrioridad ? '1' : '0' ?>"
                      onclick="abrirPedido('<?= htmlspecialchars($p['nrodoc']) ?>')"
-                     title="Ver detalle del pedido">
+                     title="<?= $tienePrioridad ? 'PRIORIDAD: ' . htmlspecialchars($p['prioridad_comentario']) : 'Ver detalle del pedido' ?>">
+                    <?php if ($tienePrioridad): ?>
+                        <div class="pp-priority-tag">⚠ Prioridad</div>
+                    <?php endif; ?>
                     <div class="pp-card-title"><?= htmlspecialchars($p['nomcli']) ?></div>
                     <div class="pp-card-info">
                         <span>Doc: <?= htmlspecialchars($nrodoc) ?></span>
@@ -183,11 +214,17 @@ function buildCard(p) {
     const status = dot === '#dc2626' ? 'sinprocesar' : dot === '#ca8a04' ? 'incompletos' : 'listos';
     const searchText = esc((p.nomcli || '') + ' ' + nrodoc).toLowerCase();
     const label = dot === '#dc2626' ? 'Sin procesar' : dot === '#ca8a04' ? 'Faltan ítems' : 'Procesado sin cerrar';
-    return `<div class="pp-card" id="card-${esc(p.nrodoc)}"
+    const tienePrioridad = !!p.prioridad_id;
+    const claseCard  = 'pp-card' + (tienePrioridad ? ' pp-priority' : '');
+    const tituloCard = tienePrioridad ? 'PRIORIDAD: ' + esc(p.prioridad_comentario || '') : 'Ver detalle del pedido';
+    const tagPrioridad = tienePrioridad ? '<div class="pp-priority-tag">⚠ Prioridad</div>' : '';
+    return `<div class="${claseCard}" id="card-${esc(p.nrodoc)}"
                  data-completo="${completo}"
                  data-status="${status}"
                  data-search="${searchText}"
-                 onclick="abrirPedido('${esc(p.nrodoc)}')" title="Ver detalle del pedido">
+                 data-prioridad="${tienePrioridad ? '1' : '0'}"
+                 onclick="abrirPedido('${esc(p.nrodoc)}')" title="${tituloCard}">
+        ${tagPrioridad}
         <div class="pp-card-title">${esc(p.nomcli)}</div>
         <div class="pp-card-info">
             <span>Doc: ${esc(nrodoc)}</span>
@@ -322,6 +359,18 @@ function pollPedidos() {
                     const dotEl = card.querySelector('.btn-estado .dot');
                     if (dotEl) dotEl.style.background = dot;
                     card.dataset.completo = (completos >= total && total > 0) ? '1' : '0';
+
+                    // Prioridad: reflejar alta/baja de alerta en tarjetas ya renderizadas
+                    const tienePrioridad = !!p.prioridad_id;
+                    card.classList.toggle('pp-priority', tienePrioridad);
+                    card.dataset.prioridad = tienePrioridad ? '1' : '0';
+                    let tag = card.querySelector('.pp-priority-tag');
+                    if (tienePrioridad && !tag) {
+                        card.insertAdjacentHTML('afterbegin', '<div class="pp-priority-tag">⚠ Prioridad</div>');
+                    } else if (!tienePrioridad && tag) {
+                        tag.remove();
+                    }
+                    card.title = tienePrioridad ? 'PRIORIDAD: ' + (p.prioridad_comentario || '') : 'Ver detalle del pedido';
                 }
             });
 
@@ -334,6 +383,7 @@ function pollPedidos() {
                 }
             });
 
+            actualizarBandaPrioridad(data);
             updateFilters();
             const now = new Date();
             txt.textContent = 'Actualizado ' + now.getHours().toString().padStart(2,'0')
@@ -345,4 +395,28 @@ function pollPedidos() {
 }
 
 setInterval(pollPedidos, 30000);
+
+function actualizarBandaPrioridad(data) {
+    const banner = document.getElementById('pp-priority-banner');
+    const list   = document.getElementById('pp-priority-list');
+    if (!banner || !list) return;
+
+    const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const activos = data.filter(p => p.prioridad_id);
+
+    if (!activos.length) {
+        banner.classList.add('pp-priority-banner-empty');
+        list.innerHTML = '';
+        return;
+    }
+
+    banner.classList.remove('pp-priority-banner-empty');
+    if (!banner.querySelector('.pp-priority-icon')) {
+        banner.insertAdjacentHTML('afterbegin', '<span class="pp-priority-icon">⚠</span>');
+    }
+    list.innerHTML = activos.map(p => {
+        const doc = String(p.nrodoc).padStart(8, '0');
+        return `<span class="pp-priority-item"><strong>PV ${esc(doc)}</strong> — ${esc(p.prioridad_comentario || '')}</span>`;
+    }).join('');
+}
 </script>
