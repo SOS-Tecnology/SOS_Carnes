@@ -485,12 +485,14 @@ class PreparacionPedidoController
 
         // ── Pedido base ───────────────────────────────────────────────────
         $cabStmt = $this->db->pdo->prepare("
-            SELECT TRIM(c.documento) AS nrodoc,
-                   TRIM(c.prefijo)   AS prefijo,
-                   TRIM(c.codcp)     AS codcp,
-                   TRIM(c.codsuc)    AS codsuc,
+            SELECT TRIM(c.documento)   AS nrodoc,
+                   TRIM(c.prefijo)     AS prefijo,
+                   TRIM(c.codcp)       AS codcp,
+                   TRIM(c.codsuc)      AS codsuc,
+                   TRIM(g.codvendcli)  AS codvendcli,
                    c.fecha, c.fechent
             FROM   cabezamov c
+            INNER  JOIN geclientes g ON c.codcp = g.codcli
             WHERE  TRIM(c.tm)       = 'PV'
               AND  TRIM(c.documento) = :doc
               AND  c.estado          = 'O'
@@ -715,11 +717,11 @@ class PreparacionPedidoController
                     INSERT INTO cabezamov
                         (tm, prefijo, documento, codcp, codsuc,
                          fecha, hora, fechent, estado, estadorm,
-                         vriva, valortotal, docaux, tmaux, prefaux)
+                         vriva, valortotal, vendedor, docaux, tmaux, prefaux)
                     VALUES
                         ('AP','00',:doc,:codcp,:codsuc,
                          :fecha,:hora,:fechent,' ','',
-                         :vriva,:valortotal,
+                         :vriva,:valortotal,:vendedor,
                          :docaux,'PV',:prefaux)
                 ")->execute([
                     ':doc'        => $newDocNum,
@@ -730,6 +732,7 @@ class PreparacionPedidoController
                     ':fechent'    => $hoy,
                     ':vriva'      => round($totalVriva, 3),
                     ':valortotal' => round($totalValor, 3),
+                    ':vendedor'   => $pedido['codvendcli'],
                     ':docaux'     => $pedido['nrodoc'],
                     ':prefaux'    => $pedido['prefijo'],
                 ]);
