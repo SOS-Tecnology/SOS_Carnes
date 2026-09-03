@@ -104,6 +104,7 @@ if (isset($_SESSION['errors'])) {
     .prep-wrap .item-info { flex: 1; min-width: 0; }
     .prep-wrap .item-cod { font-size: .68rem; color: #888; font-weight: 600; letter-spacing: .04em; }
     .prep-wrap .item-desc { font-size: .92rem; font-weight: 700; color: #1a2e1a; line-height: 1.25; }
+    .prep-wrap .item-unidad { color: #8a948a; font-weight: 600; white-space: nowrap; }
     .prep-wrap .item-fechas { display: inline-flex; gap: .75rem; margin-left: .6rem; font-size: .72rem; font-weight: 400; color: #4b5b4b; white-space: nowrap; vertical-align: baseline; }
     .prep-wrap .item-fechas .lbl { color: #8a948a; }
     .lote-fechas { display: flex; gap: .75rem; flex-wrap: wrap; font-size: .7rem; font-weight: 400; color: #4b5b4b; margin-top: .1rem; }
@@ -157,7 +158,7 @@ if (isset($_SESSION['errors'])) {
         width: 92px; text-align: right;
         font-size: .9rem; font-weight: 700; color: #15803d; font-family: monospace;
         border: 1.5px solid #86b98f; border-radius: .3rem;
-        padding: .22rem .4rem; outline: none; background: #fff;
+        padding: .14rem .4rem; outline: none; background: #fff;
     }
     .peso-lote-input:focus { border-color: #15803d; box-shadow: 0 0 0 2px rgba(21,128,61,.15); }
     .prep-wrap .peso-input[readonly] {
@@ -198,7 +199,7 @@ if (isset($_SESSION['errors'])) {
         text-transform: uppercase; letter-spacing: .03em; margin-bottom: .22rem;
     }
     .prep-wrap .peso-input {
-        width: 100%; padding: .55rem .75rem;
+        width: 100%; padding: .4rem .75rem;
         font-size: 1rem; font-weight: 700;
         border: 2px solid #1a4dad; border-radius: .4rem;
         color: #1a2e1a; background: #f0f4ff;
@@ -381,6 +382,12 @@ if (isset($_SESSION['errors'])) {
                 } else {
                     $propuesta = number_format($alistado, 3, '.', '');
                 }
+
+                // Título dinámico según la unidad del producto (cuerpomov.unidad)
+                $unidadRaw    = strtoupper(trim($it['unidad'] ?? ''));
+                $esPeso       = in_array($unidadRaw, ['KG', 'KI', 'KILO', 'KILOS', 'KIILO', 'LIBRA', 'K', 'KL'], true);
+                $unidadLabel  = $esPeso ? 'Peso' : 'Cantidad';
+                $unidadSufijo = $esPeso ? 'kg' : strtolower($unidadRaw ?: 'und');
             ?>
                 <div class="item-card">
                     <input type="hidden" name="registros[]"     value="<?= htmlspecialchars($it['registro']) ?>">
@@ -397,7 +404,7 @@ if (isset($_SESSION['errors'])) {
                                 $dVto  = empty($lotes) ? ($it['dias_vencimiento']      ?? null) : null;
                                 $fVto  = empty($lotes) ? ($it['fecha_vencimiento_fmt'] ?? null) : null;
                             ?>
-                            <div class="item-desc"><?= htmlspecialchars($it['descripcion']) ?><?php if ($fSac !== null || $dVto !== null): ?><span class="item-fechas"><?php if ($fSac !== null): ?><span><span class="lbl">Sacrificio:</span> <?= htmlspecialchars($fSac) ?></span><?php endif; ?><?php if ($dVto !== null): ?><span><span class="lbl">Vence:</span> <?= (int)$dVto ?> días &mdash; <?= htmlspecialchars($fVto) ?></span><?php endif; ?></span><?php endif; ?></div>
+                            <div class="item-desc"><?= htmlspecialchars($it['descripcion']) ?> <span class="item-unidad">(<?= htmlspecialchars(trim($it['unidad'] ?? '') ?: '—') ?>)</span><?php if ($fSac !== null || $dVto !== null): ?><span class="item-fechas"><?php if ($fSac !== null): ?><span><span class="lbl">Sacrificio:</span> <?= htmlspecialchars($fSac) ?></span><?php endif; ?><?php if ($dVto !== null): ?><span><span class="lbl">Vence:</span> <?= (int)$dVto ?> días &mdash; <?= htmlspecialchars($fVto) ?></span><?php endif; ?></span><?php endif; ?></div>
                         </div>
                         <?php if ($esIntegrado): ?>
                             <span class="item-origen-badge">PV <?= htmlspecialchars(str_pad($docOrigen, 8, '0', STR_PAD_LEFT)) ?></span>
@@ -406,6 +413,7 @@ if (isset($_SESSION['errors'])) {
                             $presInt   = (int)($it['presentacion_int'] ?? 1);
                             $presLabel = $it['presentacion_label'] ?? 'Refrigeración';
                             $diasVenc  = $it['dias_vencimiento'] ?? null;
+                            $fvtoVenc  = $it['fecha_vencimiento_fmt'] ?? null;
                             $presColor = $presInt === 2
                                 ? ['bg' => '#e0f2fe', 'text' => '#0369a1', 'border' => '#bae6fd']
                                 : ['bg' => '#dcfce7', 'text' => '#15803d', 'border' => '#bbf7d0'];
@@ -421,7 +429,9 @@ if (isset($_SESSION['errors'])) {
                                      border:1px solid <?= $diasVenc !== null ? '#fde68a' : '#e5e7eb' ?>;
                                      white-space:nowrap;"
                               title="Días de vencimiento según inv_caducidad">
-                            🗓️ <?= $diasVenc !== null ? $diasVenc . ' días' : 'N/A' ?>
+                            🗓️ <?= $diasVenc !== null
+                                ? $diasVenc . ' días — Vence en: ' . htmlspecialchars($fvtoVenc)
+                                : 'N/A' ?>
                         </span>
                     </div>
 
@@ -484,7 +494,7 @@ if (isset($_SESSION['errors'])) {
                                 <?php endif; ?>
                             </div>
                             <div>
-                                <div class="lote-peso-label">Peso (kg)</div>
+                                <div class="lote-peso-label"><?= htmlspecialchars($unidadLabel) ?> (<?= htmlspecialchars($unidadSufijo) ?>)</div>
                                 <input type="text"
                                        inputmode="decimal"
                                        id="peso_lote_<?= $idxLote ?>"
@@ -531,7 +541,7 @@ if (isset($_SESSION['errors'])) {
                             <div class="cmp-val <?= $acumuladoLotes >= $solicitado - 0.001 ? 'green' : 'amber' ?>"><?= number_format($acumuladoLotes, 3) ?></div>
                         </div>
                         <div class="peso-group">
-                            <label for="peso_<?= $globalIdx ?>"><?= !empty($lotes) ? 'Total lotes (kg)' : 'Peso definitivo (kg)' ?></label>
+                            <label for="peso_<?= $globalIdx ?>"><?= !empty($lotes) ? "Total lotes ({$unidadSufijo})" : "{$unidadLabel} definitivo ({$unidadSufijo})" ?></label>
                             <input type="text"
                                    inputmode="decimal"
                                    id="peso_<?= $globalIdx ?>"

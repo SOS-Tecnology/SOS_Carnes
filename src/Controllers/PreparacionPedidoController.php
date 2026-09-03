@@ -342,8 +342,13 @@ class PreparacionPedidoController
                 WHERE  ic.canal = :canal
             ");
             $cadStmt->execute([':canal' => $canal]);
+            // inv_caducidad.presentacion es un ENUM sin tilde ('Refrigeracion',
+            // 'Congelacion'); se normaliza al label acentuado usado internamente
+            // ($presEnumMap) para que la clave coincida con la búsqueda.
+            $presNormMap = ['Refrigeracion' => 'Refrigeración', 'Congelacion' => 'Congelación'];
             foreach ($cadStmt->fetchAll(\PDO::FETCH_ASSOC) as $c) {
-                $key = $c['codgrupo'] . '|' . $c['codsubg'] . '|' . $c['presentacion'] . '|' . $c['codc'];
+                $presNorm = $presNormMap[$c['presentacion']] ?? $c['presentacion'];
+                $key = $c['codgrupo'] . '|' . $c['codsubg'] . '|' . $presNorm . '|' . $c['codc'];
                 $cadMap[$key] = (int)$c['cantidad'];
             }
         }

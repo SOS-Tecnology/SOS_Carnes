@@ -12,6 +12,12 @@ else                                            { $dotColor = '#ca8a04'; $dotLab
 $registroUrl = urlencode($item['registro']);
 $nrodocUrl   = urlencode($pedido['nrodoc']);
 
+// Título dinámico según la unidad del producto (cuerpomov.unidad, originada en inrefinv.unid)
+$unidadRaw   = strtoupper(trim($item['unidad'] ?? ''));
+$esPeso      = in_array($unidadRaw, ['KG', 'KI', 'KILO', 'KILOS', 'KIILO', 'LIBRA', 'K', 'KL'], true);
+$unidadLabel = $esPeso ? 'Peso' : 'Cantidad';
+$unidadSufijo = $esPeso ? 'kg' : strtolower($unidadRaw ?: 'und');
+
 // Normaliza comencpo: elimina líneas vacías y espacios redundantes
 $comencpo = str_replace(['\r\n', '\r', '\n', '\\n'], "\n", $item['comencpo'] ?? '');
 $lines    = array_filter(
@@ -50,7 +56,13 @@ $comencpo = implode("\n", $lines);
     /* ── Producto ── */
     .prod-card { background:#fff;border-radius:.4rem;border:1px solid #d0d8ec;padding:.8rem 1rem;box-shadow:0 2px 6px rgba(0,0,0,.06); }
     .prod-cod  { font-size:.7rem;color:#888;font-weight:600;letter-spacing:.04em;margin-bottom:.1rem; }
-    .prod-desc { font-size:1rem;font-weight:700;color:#1a2e1a;margin-bottom:.6rem; }
+    .prod-desc-row { display:flex;align-items:baseline;justify-content:space-between;gap:.6rem;margin-bottom:.6rem; }
+    .prod-desc { font-size:1rem;font-weight:700;color:#1a2e1a; }
+    .prod-unidad {
+        flex-shrink:0;font-size:.68rem;font-weight:700;color:#1a4dad;
+        background:#eef2ff;border:1px solid #c7d2fe;border-radius:4px;
+        padding:.15rem .5rem;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;
+    }
     .item-stats { display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;text-align:center; }
     .stat-box   { background:#f5f7ff;border:1px solid #dce4f8;border-radius:.35rem;padding:.45rem .4rem; }
     .stat-label { font-size:.63rem;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:.1rem; }
@@ -254,7 +266,10 @@ $comencpo = implode("\n", $lines);
         <!-- ── Producto + stats ── -->
         <div class="prod-card">
             <div class="prod-cod"><?= htmlspecialchars($item['codart']) ?></div>
-            <div class="prod-desc"><?= htmlspecialchars($item['descripcion']) ?></div>
+            <div class="prod-desc-row">
+                <div class="prod-desc"><?= htmlspecialchars($item['descripcion']) ?></div>
+                <span class="prod-unidad"><?= htmlspecialchars($unidadRaw ?: '—') ?></span>
+            </div>
             <div class="item-stats">
                 <div class="stat-box">
                     <div class="stat-label">Solicitado</div>
@@ -339,7 +354,7 @@ $comencpo = implode("\n", $lines);
                         <th>Hora</th>
                         <th>Lote</th>
                         <th>Temp. °C</th>
-                        <th>Peso</th>
+                        <th><?= htmlspecialchars($unidadLabel) ?></th>
                         <th>Pres.</th>
                         <th></th>
                     </tr>
@@ -422,7 +437,7 @@ $comencpo = implode("\n", $lines);
                                placeholder="0.00" autocomplete="off">
                     </div>
                     <div class="form-group">
-                        <label for="cantidad">Peso (kg)</label>
+                        <label for="cantidad"><?= htmlspecialchars($unidadLabel) ?> (<?= htmlspecialchars($unidadSufijo) ?>)</label>
                         <input type="number" id="cantidad" name="cantidad"
                                class="center" min="0.001" step="0.001"
                                placeholder="0.000" autocomplete="off" required autofocus>
