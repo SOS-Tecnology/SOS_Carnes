@@ -495,6 +495,7 @@ class PreparacionPedidoController
                    TRIM(c.codcp)       AS codcp,
                    TRIM(c.codsuc)      AS codsuc,
                    TRIM(c.estadorm)    AS estadorm,
+                   TRIM(c.bodega)      AS bodega,
                    TRIM(g.codvendcli)  AS codvendcli,
                    c.fecha, c.fechent
             FROM   cabezamov c
@@ -740,15 +741,26 @@ class PreparacionPedidoController
                     $conRow    = null;
                 }
 
+                // Se trunca al ancho real de la columna (consultado en
+                // INFORMATION_SCHEMA) en vez de fallar si el nombre no cabe;
+                // así el límite queda dinámico si la columna se amplía después.
+                $usuacreaMax = $this->getColumnMaxLength('cabezamov', 'usuacrea') ?? 11;
+                $usuacrea    = substr(trim($_SESSION['user']['name'] ?? ''), 0, $usuacreaMax);
+                // horacrea es varchar(5) (H:i), a diferencia de hora (H:i:s).
+                $horacrea = substr($hora, 0, 5);
+
                 $pdo->prepare("
                     INSERT INTO cabezamov
                         (tm, prefijo, documento, codcp, codsuc,
                          fecha, hora, fechent, estado, estadorm,
-                         vriva, valortotal, vendedor, docaux, tmaux, prefaux)
+                         vriva, valortotal, vendedor, bodega,
+                         usuacrea, fechacrea, horacrea,
+                         docaux, tmaux, prefaux)
                     VALUES
                         ('AP','00',:doc,:codcp,:codsuc,
                          :fecha,:hora,:fechent,' ','',
-                         :vriva,:valortotal,:vendedor,
+                         :vriva,:valortotal,:vendedor,:bodega,
+                         :usuacrea,:fechacrea,:horacrea,
                          :docaux,'PV',:prefaux)
                 ")->execute([
                     ':doc'        => $newDocNum,
@@ -760,6 +772,10 @@ class PreparacionPedidoController
                     ':vriva'      => round($totalVriva, 3),
                     ':valortotal' => round($totalValor, 3),
                     ':vendedor'   => $pedido['codvendcli'],
+                    ':bodega'     => $pedido['bodega'],
+                    ':usuacrea'   => $usuacrea,
+                    ':fechacrea'  => $hoy,
+                    ':horacrea'   => $horacrea,
                     ':docaux'     => $pedido['nrodoc'],
                     ':prefaux'    => $pedido['prefijo'],
                 ]);
@@ -907,5 +923,25 @@ class PreparacionPedidoController
         }
 
         return $response->withHeader('Location', '/preparacion-pedido')->withStatus(302);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Ancho real de una columna (INFORMATION_SCHEMA), para truncar valores
+    // sin depender de un número fijo que quede desactualizado si la
+    // columna se amplía en la base de datos.
+    // ─────────────────────────────────────────────────────────────────────────
+    private function getColumnMaxLength(string $table, string $column): ?int
+    {
+        $stmt = $this->db->pdo->prepare("
+            SELECT CHARACTER_MAXIMUM_LENGTH
+            FROM   INFORMATION_SCHEMA.COLUMNS
+            WHERE  TABLE_SCHEMA = DATABASE()
+              AND  TABLE_NAME   = :table
+              AND  COLUMN_NAME  = :column
+            LIMIT 1
+        ");
+        $stmt->execute([':table' => $table, ':column' => $column]);
+        $len = $stmt->fetchColumn();
+        return ($len !== false && $len !== null) ? (int)$len : null;
     }
 }
