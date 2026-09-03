@@ -489,6 +489,7 @@ class PreparacionPedidoController
                    TRIM(c.prefijo)     AS prefijo,
                    TRIM(c.codcp)       AS codcp,
                    TRIM(c.codsuc)      AS codsuc,
+                   TRIM(c.estadorm)    AS estadorm,
                    TRIM(g.codvendcli)  AS codvendcli,
                    c.fecha, c.fechent
             FROM   cabezamov c
@@ -502,6 +503,27 @@ class PreparacionPedidoController
         $pedido = $cabStmt->fetch(\PDO::FETCH_ASSOC);
 
         if (!$pedido) {
+            return $response->withHeader('Location', '/preparacion-pedido')->withStatus(302);
+        }
+
+        // ── Bloquear reenvío tras cierre: si ya no hay AP abierta y el PV
+        //    no está en estadorm='A' (en alistamiento), el pedido ya fue
+        //    cerrado antes — no se debe generar una AP nueva por duplicado
+        //    de envío (doble clic, back del navegador, etc.).
+        $apAbiertaStmt = $this->db->pdo->prepare("
+            SELECT 1
+            FROM   cabezamov c
+            WHERE  TRIM(c.tm)     = 'AP'
+              AND  TRIM(c.tmaux)  = 'PV'
+              AND  TRIM(c.docaux) = :docaux
+              AND  TRIM(c.prefaux)= :prefaux
+              AND  c.estado IN ('', ' ')
+            LIMIT 1
+        ");
+        $apAbiertaStmt->execute([':docaux' => $pedido['nrodoc'], ':prefaux' => $pedido['prefijo']]);
+        $apAbierta = $apAbiertaStmt->fetch(\PDO::FETCH_ASSOC);
+
+        if (!$apAbierta && $pedido['estadorm'] !== 'A') {
             return $response->withHeader('Location', '/preparacion-pedido')->withStatus(302);
         }
 
@@ -634,8 +656,11 @@ class PreparacionPedidoController
         $apExistente = $apExistenteStmt->fetch(\PDO::FETCH_ASSOC);
 
         $pdo  = $this->db->pdo;
-        $hoy  = date('Y-m-d');
-        $hora = date('H:i:s');
+        // Se usa la hora del servidor de BD (Colombia) en vez de date() de PHP,
+        // cuyo date.timezone del servidor web está en Europe/Berlin.
+        $ahora = $pdo->query("SELECT CURDATE() AS hoy, CURTIME() AS hora")->fetch(\PDO::FETCH_ASSOC);
+        $hoy  = $ahora['hoy'];
+        $hora = $ahora['hora'];
         $pdo->beginTransaction();
 
         try {

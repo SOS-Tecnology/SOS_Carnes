@@ -188,7 +188,8 @@ class PlanillaPedidosController
             $nrStmt->execute([':prefijo' => $item['prefijo'], ':doc' => $nrodoc, ':registro' => $registro]);
             $newItemre = (string)($nrStmt->fetchColumn() ?: 1);
 
-            $hora = date('H:i:s');
+            // Hora del servidor de BD (Colombia), no la de PHP (Europe/Berlin).
+            $hora = $this->db->pdo->query("SELECT CURTIME() AS hora")->fetchColumn();
 
             // Insertar en itemmov
             $this->db->pdo->prepare("
@@ -274,7 +275,8 @@ class PlanillaPedidosController
             $nrStmt->execute([':prefijo' => $item['prefijo'], ':doc' => $nrodoc, ':registro' => $registro]);
             $newItemre = (string)($nrStmt->fetchColumn() ?: 1);
 
-            $hora = date('H:i:s');
+            // Hora del servidor de BD (Colombia), no la de PHP (Europe/Berlin).
+            $hora = $this->db->pdo->query("SELECT CURTIME() AS hora")->fetchColumn();
 
             // 3. INSERT — sin TRIM en columnas indexadas
             $this->db->pdo->prepare("
