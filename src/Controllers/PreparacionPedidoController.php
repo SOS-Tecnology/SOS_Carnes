@@ -656,11 +656,8 @@ class PreparacionPedidoController
         $apExistente = $apExistenteStmt->fetch(\PDO::FETCH_ASSOC);
 
         $pdo  = $this->db->pdo;
-        // Se usa la hora del servidor de BD (Colombia) en vez de date() de PHP,
-        // cuyo date.timezone del servidor web está en Europe/Berlin.
-        $ahora = $pdo->query("SELECT CURDATE() AS hoy, CURTIME() AS hora")->fetch(\PDO::FETCH_ASSOC);
-        $hoy  = $ahora['hoy'];
-        $hora = $ahora['hora'];
+        $hoy  = date('Y-m-d');
+        $hora = date('H:i:s');
         $pdo->beginTransaction();
 
         try {
